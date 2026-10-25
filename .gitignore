@@ -21,3 +21,6 @@ dev.tfrc
 .idea/
 .vscode/
 .DS_Store
+
+# Superpowers SDD scratch workspace
+.superpowers/

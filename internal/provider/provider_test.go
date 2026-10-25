@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -12,6 +13,16 @@ import (
 // the provider in-process.
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"ghost": providerserver.NewProtocol6WithError(New("test")()),
+}
+
+// testAccPreCheck fails the test early when acceptance-test credentials are
+// missing.
+func testAccPreCheck(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv(envToken) == "" {
+		t.Fatal(envToken + " must be set for acceptance tests")
+	}
 }
 
 func TestProviderSchemaIsValid(t *testing.T) {

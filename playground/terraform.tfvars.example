@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored, never commit it) and fill in your own values:
+#   cp playground/terraform.tfvars.example playground/terraform.tfvars
+
+# Your Ghost personal access token.
+ghost_token = "ghost_pat_..."
+
+# Optional: point at a different Ghost instance.
+# ghost_base_url = "https://api.ghost.procrastinator.fyi"
+
+# Optional: prefix for every repository the playground creates.
+# name_prefix = "playground"
+
+# Optional: an organization you administer, to also create an org-owned repository.
+# organization = "my-org"

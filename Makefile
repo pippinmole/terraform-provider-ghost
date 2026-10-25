@@ -11,6 +11,10 @@ install: build
 lint:
 	golangci-lint run
 
+# Points git at .githooks so the pre-commit hook runs golangci-lint.
+hooks:
+	git config core.hooksPath .githooks
+
 generate:
 	go generate ./...
 
@@ -30,4 +34,4 @@ dev-tfrc:
 	@printf 'provider_installation {\n  dev_overrides {\n    "pippinmole/ghost" = "%s"\n  }\n  direct {}\n}\n' "$(GOBIN)" > dev.tfrc
 	@echo "Wrote dev.tfrc -> export TF_CLI_CONFIG_FILE=$(PWD)/dev.tfrc"
 
-.PHONY: default build install lint generate fmt test testacc dev-tfrc
+.PHONY: default build install lint hooks generate fmt test testacc dev-tfrc

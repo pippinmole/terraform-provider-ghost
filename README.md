@@ -35,16 +35,19 @@ make test      # unit tests
 make testacc   # acceptance tests against live Ghost (needs GHOST_TOKEN, creates real resources)
 make generate  # regenerates docs/ with tfplugindocs
 make lint      # golangci-lint
+make hooks     # runs golangci-lint as a git pre-commit hook
 ```
 
 ### Trying the provider locally
 
+`playground/` is a single config that uses every resource and data source the provider implements:
+
 ```sh
 make install dev-tfrc
 export TF_CLI_CONFIG_FILE="$PWD/dev.tfrc"
-cd dev
-cp terraform.tfvars.example terraform.tfvars   # add your token; *.tfvars is gitignored
-terraform plan                                 # no `terraform init` needed with dev_overrides
+cp playground/terraform.tfvars.example playground/terraform.tfvars   # add your token; *.tfvars is gitignored
+terraform -chdir=playground apply                                    # no `terraform init` needed with dev_overrides
+terraform -chdir=playground destroy
 ```
 
 ### Layout
@@ -56,7 +59,7 @@ terraform plan                                 # no `terraform init` needed with
 | `internal/client` | Hand-written typed client for the Ghost API (prefers `/api/v3`, falls back to native `/api`) |
 | `examples/` | Example configs used by `tfplugindocs` |
 | `docs/` | Generated documentation, don't edit by hand |
-| `dev/` | Local scratch workspace for manual testing |
+| `playground/` | Everything-example config for manual end-to-end testing; add each new resource here |
 
 ## Releasing
 

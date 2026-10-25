@@ -1,0 +1,15 @@
+#!/bin/sh
+# Runs golangci-lint before each commit. Enable with: make hooks
+# Skip once with: git commit --no-verify
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+	echo "pre-commit: golangci-lint not found; install it (brew install golangci-lint)" >&2
+	exit 1
+fi
+
+# Only lint when Go files or the lint config are staged.
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '(\.go|go\.(mod|sum)|\.golangci\.yml)$'; then
+	exit 0
+fi
+
+exec golangci-lint run
