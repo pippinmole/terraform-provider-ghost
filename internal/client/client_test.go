@@ -73,3 +73,34 @@ func TestDoReturnsAPIError(t *testing.T) {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}
 }
+
+func TestGetUser(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/v3/users/some%20one" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(`{"login":"someone","id":11,"node_id":"U_1","name":"Some One","type":"Organization",` +
+			`"site_admin":false,"avatar_url":"a","html_url":"h","created_at":"t1","updated_at":"t2"}`))
+	})
+
+	u, err := c.GetUser(context.Background(), "some one")
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	want := User{Login: "someone", ID: 11, NodeID: "U_1", Name: "Some One", Type: "Organization",
+		AvatarURL: "a", HTMLURL: "h", CreatedAt: "t1", UpdatedAt: "t2"}
+	if *u != want {
+		t.Errorf("got %+v, want %+v", *u, want)
+	}
+}
+
+func TestGetUserNotFound(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"Not Found"}`))
+	})
+
+	if _, err := c.GetUser(context.Background(), "nobody"); !IsNotFound(err) {
+		t.Fatalf("expected not found, got %v", err)
+	}
+}

@@ -99,6 +99,48 @@ data "ghost_repository" "by_owner_and_name" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_user (data source), in each lookup form
+# ---------------------------------------------------------------------------
+
+# The user that owns the token.
+data "ghost_user" "me" {}
+
+data "ghost_user" "by_login" {
+  login = data.ghost_user.me.login
+}
+
+# ---------------------------------------------------------------------------
+# ghost_issue_label (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: the color defaults to ededed.
+resource "ghost_issue_label" "minimal" {
+  repository = ghost_repository.full.full_name
+  name       = "triage"
+}
+
+# Every argument. The "#" and upper case are kept in state as written.
+resource "ghost_issue_label" "full" {
+  repository  = ghost_repository.full.full_name
+  name        = "bug"
+  color       = "#D73A4A"
+  description = "Something isn't working"
+
+  # Recreate the label if the repository is replaced, not when it's renamed.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# A name containing "/" and ":", which are escaped in the API path. Import
+# it with "<owner>/<slug>:area/api: v3".
+resource "ghost_issue_label" "punctuated" {
+  repository = ghost_repository.full.full_name
+  name       = "area/api: v3"
+  color      = "0e8a16"
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -112,11 +154,23 @@ output "repositories" {
   }
 }
 
+output "issue_labels" {
+  description = "The issue labels the playground manages."
+  value = {
+    for key, label in {
+      minimal    = ghost_issue_label.minimal
+      full       = ghost_issue_label.full
+      punctuated = ghost_issue_label.punctuated
+    } : key => { id = label.id, color = label.color, url = label.url }
+  }
+}
+
 output "data_sources_agree" {
   description = "True when each data source lookup matches the resource it reads."
   value = alltrue([
     data.ghost_repository.by_full_name.repo_id == ghost_repository.full.repo_id,
     data.ghost_repository.by_name.repo_id == ghost_repository.minimal.repo_id,
     data.ghost_repository.by_owner_and_name.repo_id == ghost_repository.full.repo_id,
+    data.ghost_user.by_login.user_id == data.ghost_user.me.user_id,
   ])
 }

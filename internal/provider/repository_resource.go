@@ -275,7 +275,7 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 		r.saveCreatedFallback(ctx, resp, plan, repo, org, login)
 		return
 	}
-	plan.Description = repositoryDescriptionFromRemote(plan.Description, repo.Description)
+	plan.Description = descriptionFromRemote(plan.Description, repo.Description)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -325,7 +325,7 @@ func (r *RepositoryResource) saveCreatedFallback(ctx context.Context, resp *reso
 
 	plan.set(repo, owner, repo.Name)
 	plan.keepOwnerCase(owner)
-	plan.Description = repositoryDescriptionFromRemote(plan.Description, repo.Description)
+	plan.Description = descriptionFromRemote(plan.Description, repo.Description)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -353,7 +353,7 @@ func (r *RepositoryResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	state.Name = repositoryNameFromRemote(state.Name, priorSlug, repo.Name)
-	state.Description = repositoryDescriptionFromRemote(state.Description, repo.Description)
+	state.Description = descriptionFromRemote(state.Description, repo.Description)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -476,7 +476,7 @@ func (r *RepositoryResource) refresh(ctx context.Context, m *repositoryResourceM
 	if err := m.fromRemote(repo); err != nil {
 		return err
 	}
-	m.Description = repositoryDescriptionFromRemote(m.Description, repo.Description)
+	m.Description = descriptionFromRemote(m.Description, repo.Description)
 
 	return nil
 }
@@ -553,10 +553,10 @@ func repositoryNameFromRemote(prior types.String, priorSlug, remote string) type
 	return types.StringValue(remote)
 }
 
-// repositoryDescriptionFromRemote treats a missing and an empty remote
+// descriptionFromRemote treats a missing and an empty remote
 // description as the same thing, keeping whichever of null or "" was in
 // state so neither produces a diff.
-func repositoryDescriptionFromRemote(prior types.String, remote *string) types.String {
+func descriptionFromRemote(prior types.String, remote *string) types.String {
 	if remote == nil || *remote == "" {
 		if !prior.IsNull() && !prior.IsUnknown() && prior.ValueString() == "" {
 			return prior

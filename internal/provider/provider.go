@@ -110,11 +110,15 @@ func (p *GhostProvider) Configure(ctx context.Context, req provider.ConfigureReq
 func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewRepositoryResource,
+		NewIssueLabelResource,
 	}
 }
 
 func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewRepositoryDataSource}
+	return []func() datasource.DataSource{
+		NewRepositoryDataSource,
+		NewUserDataSource,
+	}
 }
 
 // stringValueOrEnv returns the configured value, falling back to the named
