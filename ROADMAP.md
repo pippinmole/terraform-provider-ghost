@@ -42,7 +42,7 @@ Tracks what the provider implements against the [Ghost API](https://api.ghost.pr
 | ------ | ---- | ----- |
 | ✅ | Provider configuration | `token` (`GHOST_TOKEN`), `base_url` (`GHOST_BASE_URL`, default `https://api.ghost.procrastinator.fyi`) |
 | ✅ | Typed API client (`internal/client`) | Supports both API surfaces, typed errors, `IsNotFound` |
-| ✅ | Acceptance test harness | `TF_ACC` tests against live Ghost; skip helper for ⚠️ items; sweepers (need native repository delete ⚠️) |
+| 🚧 | Acceptance test harness | `testAccPreCheck` and resource/data source acceptance tests exist (`TF_ACC` against live Ghost); ❌ sweepers for orphaned `tf-acc-*` repositories (need native repository delete ⚠️); ❌ skip helper for ⚠️ native-PAT items |
 | ❌ | First release on the Terraform Registry | Needs a GPG key and the `GPG_PRIVATE_KEY` / `PASSPHRASE` repo secrets |
 
 ## Tier 1: implement first
