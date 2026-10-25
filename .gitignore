@@ -1,0 +1,23 @@
+# Binaries
+terraform-provider-ghost
+/bin/
+/dist/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+
+# Secrets: variable files hold API tokens and must never be committed
+*.tfvars
+*.tfvars.json
+.terraformrc
+dev.tfrc
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
