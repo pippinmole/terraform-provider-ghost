@@ -63,9 +63,7 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a Ghost repository.\n\n" +
-			"Repositories are created through the GitHub-compatible API and updated or deleted through Ghost's native API. " +
-			"The native API does not accept personal access tokens yet (this is expected to change), so until it does, " +
-			"updating or destroying a repository can fail with a 401 error.",
+			"Repositories are created through the GitHub-compatible API and updated or deleted through Ghost's native API.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The repository's full name, `owner/slug`.",

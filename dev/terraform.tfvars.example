@@ -1,2 +1,0 @@
-# Copy to terraform.tfvars (gitignored) and fill in your personal access token.
-ghost_token = "ghost_pat_..."
