@@ -110,6 +110,32 @@ data "ghost_user" "by_login" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_issue_label (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: the color defaults to ededed.
+resource "ghost_issue_label" "minimal" {
+  repository = ghost_repository.full.full_name
+  name       = "triage"
+}
+
+# Every argument. The "#" and upper case are kept in state as written.
+resource "ghost_issue_label" "full" {
+  repository  = ghost_repository.full.full_name
+  name        = "bug"
+  color       = "#D73A4A"
+  description = "Something isn't working"
+}
+
+# A name containing "/" and ":", which are escaped in the API path. Import
+# it with "<owner>/<slug>:area/api: v3".
+resource "ghost_issue_label" "punctuated" {
+  repository = ghost_repository.full.full_name
+  name       = "area/api: v3"
+  color      = "0e8a16"
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -120,6 +146,17 @@ output "repositories" {
       { minimal = ghost_repository.minimal, full = ghost_repository.full },
       { for r in ghost_repository.organization : "organization" => r },
     ) : key => { full_name = repo.full_name, visibility = repo.visibility, html_url = repo.html_url }
+  }
+}
+
+output "issue_labels" {
+  description = "The issue labels the playground manages."
+  value = {
+    for key, label in {
+      minimal    = ghost_issue_label.minimal
+      full       = ghost_issue_label.full
+      punctuated = ghost_issue_label.punctuated
+    } : key => { id = label.id, color = label.color, url = label.url }
   }
 }
 

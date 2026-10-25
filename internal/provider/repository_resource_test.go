@@ -56,7 +56,7 @@ func TestRepositoryNameFromRemote(t *testing.T) {
 	}
 }
 
-func TestRepositoryDescriptionFromRemote(t *testing.T) {
+func TestDescriptionFromRemote(t *testing.T) {
 	tests := []struct {
 		name   string
 		prior  types.String
@@ -71,7 +71,7 @@ func TestRepositoryDescriptionFromRemote(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := repositoryDescriptionFromRemote(tt.prior, tt.remote); !got.Equal(tt.want) {
+			if got := descriptionFromRemote(tt.prior, tt.remote); !got.Equal(tt.want) {
 				t.Errorf("got %s, want %s", got, tt.want)
 			}
 		})

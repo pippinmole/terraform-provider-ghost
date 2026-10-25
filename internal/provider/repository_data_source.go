@@ -225,7 +225,7 @@ func (m *repositoryDataSourceModel) fromRemote(repo *client.Repository) error {
 
 	m.Owner = types.StringValue(owner)
 	m.Name = types.StringValue(repo.Name)
-	m.Description = repositoryDescriptionFromRemote(types.StringNull(), repo.Description)
+	m.Description = descriptionFromRemote(types.StringNull(), repo.Description)
 	m.CreatedAt = types.StringValue(repo.CreatedAt)
 	m.UpdatedAt = types.StringValue(repo.UpdatedAt)
 	m.PushedAt = types.StringNull()
