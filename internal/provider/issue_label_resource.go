@@ -50,14 +50,15 @@ type IssueLabelResource struct {
 
 // issueLabelResourceModel maps the ghost_issue_label schema.
 type issueLabelResourceModel struct {
-	ID          types.String `tfsdk:"id"`
-	Repository  types.String `tfsdk:"repository"`
-	Name        types.String `tfsdk:"name"`
-	Color       types.String `tfsdk:"color"`
-	Description types.String `tfsdk:"description"`
-	LabelID     types.Int64  `tfsdk:"label_id"`
-	NodeID      types.String `tfsdk:"node_id"`
-	URL         types.String `tfsdk:"url"`
+	ID           types.String `tfsdk:"id"`
+	Repository   types.String `tfsdk:"repository"`
+	RepositoryID types.Int64  `tfsdk:"repository_id"`
+	Name         types.String `tfsdk:"name"`
+	Color        types.String `tfsdk:"color"`
+	Description  types.String `tfsdk:"description"`
+	LabelID      types.Int64  `tfsdk:"label_id"`
+	NodeID       types.String `tfsdk:"node_id"`
+	URL          types.String `tfsdk:"url"`
 }
 
 func (r *IssueLabelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -76,12 +77,16 @@ func (r *IssueLabelResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				PlanModifiers:       stableString,
 			},
 			"repository": schema.StringAttribute{
-				MarkdownDescription: "The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Changing it forces a new label.",
+				MarkdownDescription: "The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Renaming the repository updates this in place; pointing it at a different repository forces a new label.",
 				Required:            true,
-				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(fullNamePattern, `must be "owner/slug", e.g. "alice/my-repo"`),
 				},
+			},
+			"repository_id": schema.Int64Attribute{
+				MarkdownDescription: "The numeric ID of `repository`.",
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The label name, up to 50 characters. Ghost matches label names case-sensitively, so `bug` and `Bug` are different labels. Renaming updates the label in place.",
@@ -139,8 +144,10 @@ func (r *IssueLabelResource) Configure(_ context.Context, req resource.Configure
 	r.client = c
 }
 
-// ModifyPlan marks the attributes derived from the name as unknown when it
-// changes, since UseStateForUnknown would otherwise keep their stale values.
+// ModifyPlan marks the attributes derived from the name and repository as
+// unknown when either changes, since UseStateForUnknown would otherwise keep
+// their stale values. A repository change is applied in place when it is the
+// same repository under a new name, and forces a new label otherwise.
 func (r *IssueLabelResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
@@ -153,7 +160,21 @@ func (r *IssueLabelResource) ModifyPlan(ctx context.Context, req resource.Modify
 		return
 	}
 
-	if !plan.Name.Equal(state.Name) {
+	if !plan.Repository.Equal(state.Repository) && !plan.Repository.IsUnknown() {
+		// A known new value can be checked now. An unknown one is usually a
+		// ghost_repository being renamed, and Update checks it once known.
+		repo, err := r.getRepository(ctx, plan.Repository.ValueString())
+		if client.IsNotFound(err) || (err == nil && !sameRepository(state.RepositoryID, repo)) {
+			resp.RequiresReplace.Append(path.Root("repository"))
+			return
+		}
+		if err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("repository"), "Error reading repository", err.Error())
+			return
+		}
+	}
+
+	if !plan.Name.Equal(state.Name) || !plan.Repository.Equal(state.Repository) {
 		for _, attr := range []string{"id", "url"} {
 			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(attr), types.StringUnknown())...)
 		}
@@ -172,6 +193,18 @@ func (r *IssueLabelResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddAttributeError(path.Root("repository"), "Invalid repository", err.Error())
 		return
 	}
+
+	repository, err := r.client.GetRepository(ctx, owner, repo)
+	if client.IsNotFound(err) {
+		resp.Diagnostics.AddAttributeError(path.Root("repository"), "Repository not found",
+			fmt.Sprintf("Repository %s not found. Owner and slug are case-sensitive.", plan.Repository.ValueString()))
+		return
+	}
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading repository", err.Error())
+		return
+	}
+	plan.RepositoryID = types.Int64Value(repository.ID)
 
 	label, err := r.client.CreateLabel(ctx, owner, repo, client.CreateLabelRequest{
 		Name:        plan.Name.ValueString(),
@@ -218,6 +251,16 @@ func (r *IssueLabelResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	// An imported label has no repository_id yet.
+	if state.RepositoryID.IsNull() {
+		repository, err := r.client.GetRepository(ctx, owner, repo)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading repository", err.Error())
+			return
+		}
+		state.RepositoryID = types.Int64Value(repository.ID)
+	}
+
 	state.fromRemote(label)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -234,6 +277,21 @@ func (r *IssueLabelResource) Update(ctx context.Context, req resource.UpdateRequ
 	if err != nil {
 		resp.Diagnostics.AddAttributeError(path.Root("repository"), "Invalid repository", err.Error())
 		return
+	}
+
+	if !plan.Repository.Equal(state.Repository) {
+		repository, err := r.client.GetRepository(ctx, owner, repo)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading repository", err.Error())
+			return
+		}
+		if !sameRepository(state.RepositoryID, repository) {
+			resp.Diagnostics.AddAttributeError(path.Root("repository"), "Label can't be moved",
+				fmt.Sprintf("%s is a different repository from the one this label was created in. "+
+					"Labels can't be moved; replace it with terraform apply -replace=<address>.", plan.Repository.ValueString()))
+			return
+		}
+		plan.RepositoryID = types.Int64Value(repository.ID)
 	}
 
 	update := client.UpdateLabelRequest{
@@ -282,6 +340,22 @@ func (r *IssueLabelResource) ImportState(ctx context.Context, req resource.Impor
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("repository"), repository)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
+}
+
+// getRepository looks up the repository with the given "owner/slug" name.
+func (r *IssueLabelResource) getRepository(ctx context.Context, fullName string) (*client.Repository, error) {
+	owner, repo, err := client.SplitFullName(fullName)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.client.GetRepository(ctx, owner, repo)
+}
+
+// sameRepository reports whether repo is the repository a label was created
+// in, given the repository_id in state. A missing ID can't rule it out.
+func sameRepository(stateRepoID types.Int64, repo *client.Repository) bool {
+	return stateRepoID.IsNull() || stateRepoID.IsUnknown() || stateRepoID.ValueInt64() == repo.ID
 }
 
 // fromRemote copies label into m. The repository is kept as configured, and

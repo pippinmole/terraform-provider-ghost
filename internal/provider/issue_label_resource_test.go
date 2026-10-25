@@ -61,6 +61,27 @@ func TestLabelColorFromRemote(t *testing.T) {
 	}
 }
 
+func TestSameRepository(t *testing.T) {
+	tests := []struct {
+		name    string
+		stateID types.Int64
+		repoID  int64
+		want    bool
+	}{
+		{"null state", types.Int64Null(), 8, true},
+		{"unknown state", types.Int64Unknown(), 8, true},
+		{"same", types.Int64Value(7), 7, true},
+		{"different", types.Int64Value(7), 8, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameRepository(tt.stateID, &client.Repository{ID: tt.repoID}); got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestIssueLabelConfigValidation runs offline: the attribute validators
 // reject the config before the provider is ever configured.
 func TestIssueLabelConfigValidation(t *testing.T) {
@@ -178,6 +199,50 @@ resource "ghost_issue_label" "dup" {
   repository = ghost_issue_label.test.repository
   name       = ghost_issue_label.test.name`),
 				ExpectError: regexp.MustCompile(`(?s)already exists.*terraform import`),
+			},
+		},
+	})
+}
+
+func TestAccIssueLabelResource_repositoryRename(t *testing.T) {
+	repoName := acctest.RandomWithPrefix("tf-acc")
+	renamed := repoName + "-renamed"
+
+	sameLabelID := statecheck.CompareValue(compare.ValuesSame())
+	stateChecks := func() []statecheck.StateCheck {
+		return []statecheck.StateCheck{
+			sameLabelID.AddStateValue("ghost_issue_label.test", tfjsonpath.New("label_id")),
+			statecheck.CompareValuePairs(
+				"ghost_issue_label.test", tfjsonpath.New("repository"),
+				"ghost_repository.test", tfjsonpath.New("full_name"),
+				compare.ValuesSame(),
+			),
+		}
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIssueLabelDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:            testAccIssueLabelConfig(repoName, `name = "bug"`),
+				ConfigStateChecks: stateChecks(),
+				Check:             resource.TestCheckResourceAttrSet("ghost_issue_label.test", "repository_id"),
+			},
+			{
+				// Renaming the repository keeps the label, and its issues.
+				Config: testAccIssueLabelConfig(renamed, `name = "bug"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("ghost_issue_label.test", plancheck.ResourceActionUpdate)},
+				},
+				ConfigStateChecks: stateChecks(),
+				Check: resource.TestCheckResourceAttrWith("ghost_issue_label.test", "id", func(v string) error {
+					if !strings.HasSuffix(v, "/"+renamed+":bug") {
+						return fmt.Errorf("id %q was not updated after the repository rename", v)
+					}
+					return nil
+				}),
 			},
 		},
 	})

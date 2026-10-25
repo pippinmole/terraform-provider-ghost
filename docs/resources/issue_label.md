@@ -50,7 +50,7 @@ resource "ghost_issue_label" "standard" {
 ### Required
 
 - `name` (String) The label name, up to 50 characters. Ghost matches label names case-sensitively, so `bug` and `Bug` are different labels. Renaming updates the label in place.
-- `repository` (String) The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Changing it forces a new label.
+- `repository` (String) The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Renaming the repository updates this in place; pointing it at a different repository forces a new label.
 
 ### Optional
 
@@ -62,6 +62,7 @@ resource "ghost_issue_label" "standard" {
 - `id` (String) The repository's full name and the label name, `owner/slug:name`.
 - `label_id` (Number) The numeric label ID.
 - `node_id` (String) The GraphQL node ID.
+- `repository_id` (Number) The numeric ID of `repository`.
 - `url` (String) The label's API URL.
 
 ## Import
