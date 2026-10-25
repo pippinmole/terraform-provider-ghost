@@ -243,3 +243,21 @@ func TestRepositoryWithAppliedUpdate(t *testing.T) {
 		t.Error("withAppliedUpdate must not modify the receiver")
 	}
 }
+
+func TestRepositoryAPILocationPrefersCanonicalFullName(t *testing.T) {
+	m := repositoryResourceModel{
+		repositoryRemoteModel: repositoryRemoteModel{
+			FullName: types.StringValue("alice/demo"), Slug: types.StringValue("demo"),
+		},
+		Owner: types.StringValue("Alice"),
+	}
+	if owner, slug := m.apiLocation(); owner != "alice" || slug != "demo" {
+		t.Errorf("apiLocation() = %q, %q; want the canonical alice, demo", owner, slug)
+	}
+
+	// Straight after import full_name is still null.
+	m.FullName = types.StringNull()
+	if owner, slug := m.apiLocation(); owner != "Alice" || slug != "demo" {
+		t.Errorf("apiLocation() without full_name = %q, %q; want Alice, demo", owner, slug)
+	}
+}

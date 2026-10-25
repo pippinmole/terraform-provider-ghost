@@ -135,7 +135,7 @@ func (d *RepositoryDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 				Computed:            true,
 			},
 			"pushed_at": schema.StringAttribute{
-				MarkdownDescription: "When the repository was last pushed to, as an RFC 3339 timestamp. Null when nothing has been pushed.",
+				MarkdownDescription: "When the repository was last pushed to, as an RFC 3339 timestamp. Ghost reports the creation time for a repository that has never been pushed to.",
 				Computed:            true,
 			},
 		},

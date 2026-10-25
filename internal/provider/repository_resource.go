@@ -286,7 +286,7 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 	// The default branch cannot be chosen at creation time.
 	if !wantBranch.IsNull() && !wantBranch.IsUnknown() && wantBranch.ValueString() != repo.DefaultBranch {
 		branch := wantBranch.ValueString()
-		owner, slug := plan.Owner.ValueString(), plan.Slug.ValueString()
+		owner, slug := plan.apiLocation()
 		if _, err := r.client.UpdateRepository(ctx, owner, slug, client.UpdateRepositoryRequest{DefaultBranch: &branch}); err != nil {
 			resp.Diagnostics.AddError("Error setting default branch",
 				fmt.Sprintf("Repository %s/%s was created but setting default_branch to %q failed: %s", owner, slug, branch, err))
@@ -338,7 +338,8 @@ func (r *RepositoryResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	repo, err := r.client.GetRepository(ctx, state.Owner.ValueString(), state.Slug.ValueString())
+	owner, slug := state.apiLocation()
+	repo, err := r.client.GetRepository(ctx, owner, slug)
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -367,7 +368,7 @@ func (r *RepositoryResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	owner, slug := state.Owner.ValueString(), state.Slug.ValueString()
+	owner, slug := state.apiLocation()
 
 	var update client.UpdateRepositoryRequest
 	changed := false
@@ -438,7 +439,8 @@ func (r *RepositoryResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err := r.client.DeleteRepository(ctx, state.Owner.ValueString(), state.Slug.ValueString())
+	owner, slug := state.apiLocation()
+	err := r.client.DeleteRepository(ctx, owner, slug)
 	if err == nil || client.IsNotFound(err) {
 		return
 	}
@@ -492,6 +494,20 @@ func (m *repositoryResourceModel) fromRemote(repo *client.Repository) error {
 	m.keepOwnerCase(owner)
 
 	return nil
+}
+
+// apiLocation returns the owner and slug to put in API paths. Ghost matches
+// the owner segment case-sensitively, so it prefers the canonical full_name
+// over the configured owner spelling, falling back to owner/slug before the
+// first read (e.g. straight after import).
+func (m repositoryResourceModel) apiLocation() (owner, slug string) {
+	if !m.FullName.IsNull() && !m.FullName.IsUnknown() {
+		if o, s, err := client.SplitFullName(m.FullName.ValueString()); err == nil {
+			return o, s
+		}
+	}
+
+	return m.Owner.ValueString(), m.Slug.ValueString()
 }
 
 // keepOwnerCase sets owner unless m already holds it in another letter case;

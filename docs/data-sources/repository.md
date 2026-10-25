@@ -50,7 +50,7 @@ data "ghost_repository" "by_owner" {
 - `id` (String) The repository's full name, `owner/slug`.
 - `node_id` (String) The GraphQL node ID.
 - `private` (Boolean) Whether the repository is private.
-- `pushed_at` (String) When the repository was last pushed to, as an RFC 3339 timestamp. Null when nothing has been pushed.
+- `pushed_at` (String) When the repository was last pushed to, as an RFC 3339 timestamp. Ghost reports the creation time for a repository that has never been pushed to.
 - `repo_id` (Number) The numeric repository ID.
 - `slug` (String) The repository's URL-safe name.
 - `ssh_url` (String) The SSH clone URL, empty when SSH is unavailable.
