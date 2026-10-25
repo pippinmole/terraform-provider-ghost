@@ -8,6 +8,12 @@ resource "ghost_issue_label" "bug" {
   name        = "bug"
   color       = "#D73A4A"
   description = "Something isn't working"
+
+  # Replacing the repository deletes its labels; this recreates the label in
+  # the same apply. repo_id doesn't change when the repository is renamed.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.example.repo_id]
+  }
 }
 
 # A standard set of labels. Label names are case-sensitive.

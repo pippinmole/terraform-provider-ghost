@@ -7,6 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -82,6 +86,39 @@ func TestSameRepository(t *testing.T) {
 	}
 }
 
+// TestIssueLabelNameValidators runs the name attribute's validators. Ghost
+// counts the 50-character limit in code points and trims Unicode whitespace.
+func TestIssueLabelNameValidators(t *testing.T) {
+	var schemaResp fwresource.SchemaResponse
+	NewIssueLabelResource().Schema(context.Background(), fwresource.SchemaRequest{}, &schemaResp)
+	nameAttr, ok := schemaResp.Schema.Attributes["name"].(schema.StringAttribute)
+	if !ok {
+		t.Fatal("name is not a string attribute")
+	}
+	validators := nameAttr.Validators
+
+	valid := func(name string) bool {
+		resp := &validator.StringResponse{}
+		for _, v := range validators {
+			v.ValidateString(context.Background(), validator.StringRequest{
+				Path: path.Root("name"), ConfigValue: types.StringValue(name),
+			}, resp)
+		}
+		return !resp.Diagnostics.HasError()
+	}
+
+	for _, name := range []string{"bug", "a b", strings.Repeat("汉", 50), strings.Repeat("😀", 50)} {
+		if !valid(name) {
+			t.Errorf("%q: expected valid", name)
+		}
+	}
+	for _, name := range []string{strings.Repeat("汉", 51), " x", "x\u00a0", "\u3000x", "x\v", "\ufeffx", ".", ".."} {
+		if valid(name) {
+			t.Errorf("%q: expected invalid", name)
+		}
+	}
+}
+
 // TestIssueLabelConfigValidation runs offline: the attribute validators
 // reject the config before the provider is ever configured.
 func TestIssueLabelConfigValidation(t *testing.T) {
@@ -94,7 +131,7 @@ func TestIssueLabelConfigValidation(t *testing.T) {
 		{"trailing whitespace", `name = "bug "`, `whitespace`},
 		{"dot", `name = "."`, `name`},
 		{"dot dot", `name = ".."`, `name`},
-		{"too long", `name = "` + strings.Repeat("x", 51) + `"`, `length`},
+		{"too long", `name = "` + strings.Repeat("x", 51) + `"`, `(?i)length`},
 		{"bad color", `color = "zzz"`, `six hex digits`},
 		{"short color", `color = "#12345"`, `six hex digits`},
 		{"bad repository", `repository = "nope"`, `must be "owner/slug"`},
@@ -226,13 +263,14 @@ func TestAccIssueLabelResource_repositoryRename(t *testing.T) {
 		CheckDestroy:             testAccCheckIssueLabelDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:            testAccIssueLabelConfig(repoName, `name = "bug"`),
+				Config:            testAccIssueLabelConfig(repoName, testAccIssueLabelReplaceTriggeredBy),
 				ConfigStateChecks: stateChecks(),
 				Check:             resource.TestCheckResourceAttrSet("ghost_issue_label.test", "repository_id"),
 			},
 			{
-				// Renaming the repository keeps the label, and its issues.
-				Config: testAccIssueLabelConfig(renamed, `name = "bug"`),
+				// Renaming the repository keeps the label, and its issues,
+				// even with the recommended replace_triggered_by.
+				Config: testAccIssueLabelConfig(renamed, testAccIssueLabelReplaceTriggeredBy),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("ghost_issue_label.test", plancheck.ResourceActionUpdate)},
 				},
@@ -248,10 +286,87 @@ func TestAccIssueLabelResource_repositoryRename(t *testing.T) {
 	})
 }
 
+func TestAccIssueLabelResource_repositoryReplaced(t *testing.T) {
+	repoName := acctest.RandomWithPrefix("tf-acc")
+	config := func(license string) string {
+		return testAccRepositoryConfig(repoName, fmt.Sprintf("license_template = %q", license)) +
+			testAccIssueLabelBlock(testAccIssueLabelReplaceTriggeredBy)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIssueLabelDestroy,
+		Steps: []resource.TestStep{
+			{Config: config("mit")},
+			{
+				// Changing a create-only argument replaces the repository,
+				// which deletes its labels; replace_triggered_by recreates them.
+				Config: config("apache-2.0"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ghost_repository.test", plancheck.ResourceActionDestroyBeforeCreate),
+						plancheck.ExpectResourceAction("ghost_issue_label.test", plancheck.ResourceActionReplace),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.CompareValuePairs(
+						"ghost_issue_label.test", tfjsonpath.New("repository_id"),
+						"ghost_repository.test", tfjsonpath.New("repo_id"),
+						compare.ValuesSame(),
+					),
+				},
+				Check: testAccCheckIssueLabelExists("ghost_issue_label.test"),
+			},
+		},
+	})
+}
+
+// testAccCheckIssueLabelExists checks that the label in state exists remotely
+// with the label ID in state.
+func testAccCheckIssueLabelExists(address string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[address]
+		if !ok {
+			return fmt.Errorf("%s not in state", address)
+		}
+		c, err := testAccClient()
+		if err != nil {
+			return err
+		}
+		owner, repo, err := client.SplitFullName(rs.Primary.Attributes["repository"])
+		if err != nil {
+			return err
+		}
+		label, err := c.GetLabel(context.Background(), owner, repo, rs.Primary.Attributes["name"])
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", rs.Primary.ID, err)
+		}
+		if got := fmt.Sprint(label.ID); got != rs.Primary.Attributes["label_id"] {
+			return fmt.Errorf("label_id in state is %s, remote is %s", rs.Primary.Attributes["label_id"], got)
+		}
+		return nil
+	}
+}
+
+// testAccIssueLabelReplaceTriggeredBy is a label configured as the docs
+// recommend, so it is recreated along with its repository.
+const testAccIssueLabelReplaceTriggeredBy = `name = "bug"
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.test.repo_id]
+  }`
+
 // testAccIssueLabelConfig returns a repository and a ghost_issue_label.test
 // in it, with attrs as the label's other arguments.
 func testAccIssueLabelConfig(repoName, attrs string) string {
-	return testAccRepositoryConfig(repoName, "") + fmt.Sprintf(`
+	return testAccRepositoryConfig(repoName, "") + testAccIssueLabelBlock(attrs)
+}
+
+// testAccIssueLabelBlock returns a ghost_issue_label.test in
+// ghost_repository.test, with attrs as its other arguments.
+func testAccIssueLabelBlock(attrs string) string {
+	return fmt.Sprintf(`
 resource "ghost_issue_label" "test" {
   repository = ghost_repository.test.full_name
   %s

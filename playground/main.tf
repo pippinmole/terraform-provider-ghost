@@ -125,6 +125,11 @@ resource "ghost_issue_label" "full" {
   name        = "bug"
   color       = "#D73A4A"
   description = "Something isn't working"
+
+  # Recreate the label if the repository is replaced, not when it's renamed.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
 }
 
 # A name containing "/" and ":", which are escaped in the API path. Import

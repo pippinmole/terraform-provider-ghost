@@ -31,8 +31,9 @@ var (
 
 var (
 	// labelNamePattern rejects leading and trailing whitespace, which Ghost
-	// trims silently and would otherwise show as a perpetual diff.
-	labelNamePattern = regexp.MustCompile(`(?s)^\S(.*\S)?$`)
+	// trims silently, so the label it stores would not match the config. The
+	// class is the set JavaScript's String.prototype.trim removes.
+	labelNamePattern = regexp.MustCompile(`(?s)^[^\s\p{Z}\x{0B}\x{FEFF}](.*[^\s\p{Z}\x{0B}\x{FEFF}])?$`)
 	// labelColorPattern matches the six hex digits Ghost accepts, with an
 	// optional leading "#" that Ghost strips.
 	labelColorPattern = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
@@ -77,7 +78,7 @@ func (r *IssueLabelResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				PlanModifiers:       stableString,
 			},
 			"repository": schema.StringAttribute{
-				MarkdownDescription: "The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Renaming the repository updates this in place; pointing it at a different repository forces a new label.",
+				MarkdownDescription: "The repository's full name, `owner/slug`, e.g. `ghost_repository.example.full_name`. Renaming the repository updates this in place; pointing it at a different repository forces a new label. Replacing the repository deletes its labels, so add `lifecycle { replace_triggered_by = [ghost_repository.example.repo_id] }` to recreate the label in the same apply.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(fullNamePattern, `must be "owner/slug", e.g. "alice/my-repo"`),
@@ -92,7 +93,7 @@ func (r *IssueLabelResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				MarkdownDescription: "The label name, up to 50 characters. Ghost matches label names case-sensitively, so `bug` and `Bug` are different labels. Renaming updates the label in place.",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 50),
+					stringvalidator.UTF8LengthBetween(1, 50),
 					stringvalidator.NoneOf(".", ".."),
 					stringvalidator.RegexMatches(labelNamePattern, "must not start or end with whitespace"),
 				},
