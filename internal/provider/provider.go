@@ -114,7 +114,10 @@ func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource 
 }
 
 func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewRepositoryDataSource}
+	return []func() datasource.DataSource{
+		NewRepositoryDataSource,
+		NewUserDataSource,
+	}
 }
 
 // stringValueOrEnv returns the configured value, falling back to the named

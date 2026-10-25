@@ -99,6 +99,17 @@ data "ghost_repository" "by_owner_and_name" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_user (data source), in each lookup form
+# ---------------------------------------------------------------------------
+
+# The user that owns the token.
+data "ghost_user" "me" {}
+
+data "ghost_user" "by_login" {
+  login = data.ghost_user.me.login
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -118,5 +129,6 @@ output "data_sources_agree" {
     data.ghost_repository.by_full_name.repo_id == ghost_repository.full.repo_id,
     data.ghost_repository.by_name.repo_id == ghost_repository.minimal.repo_id,
     data.ghost_repository.by_owner_and_name.repo_id == ghost_repository.full.repo_id,
+    data.ghost_user.by_login.user_id == data.ghost_user.me.user_id,
   ])
 }
