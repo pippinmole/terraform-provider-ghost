@@ -35,6 +35,7 @@ make test      # unit tests
 make testacc   # acceptance tests against live Ghost (needs GHOST_TOKEN, creates real resources)
 make generate  # regenerates docs/ with tfplugindocs
 make lint      # golangci-lint
+make hooks     # runs golangci-lint as a git pre-commit hook
 ```
 
 ### Trying the provider locally
