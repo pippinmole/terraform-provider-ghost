@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 
 	"github.com/pippinmole/terraform-provider-ghost/internal/client"
 )
@@ -136,13 +141,29 @@ func TestAccRepositoryResource(t *testing.T) {
 	name := acctest.RandomWithPrefix("tf-acc")
 	renamed := name + "-renamed"
 
+	// The same repository must survive every step: updates are in place.
+	sameRepoID := statecheck.CompareValue(compare.ValuesSame())
+	// Each call records one more value to compare, so call it once per step.
+	repoIDCheck := func() []statecheck.StateCheck {
+		return []statecheck.StateCheck{
+			sameRepoID.AddStateValue("ghost_repository.test", tfjsonpath.New("repo_id")),
+		}
+	}
+	expectAction := func(action plancheck.ResourceActionType) resource.ConfigPlanChecks {
+		return resource.ConfigPlanChecks{
+			PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("ghost_repository.test", action)},
+		}
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRepositoryDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccRepositoryConfig(name, `description = "created by terraform acceptance tests"`),
+				Config:            testAccRepositoryConfig(name, `description = "created by terraform acceptance tests"`),
+				ConfigPlanChecks:  expectAction(plancheck.ResourceActionCreate),
+				ConfigStateChecks: repoIDCheck(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ghost_repository.test", "name", name),
 					resource.TestCheckResourceAttr("ghost_repository.test", "slug", name),
@@ -169,19 +190,31 @@ func TestAccRepositoryResource(t *testing.T) {
 				Config: testAccRepositoryConfig(renamed, `
   description = "updated"
   visibility  = "public"`),
+				ConfigPlanChecks:  expectAction(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: repoIDCheck(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ghost_repository.test", "name", renamed),
 					resource.TestCheckResourceAttr("ghost_repository.test", "slug", renamed),
 					resource.TestCheckResourceAttr("ghost_repository.test", "description", "updated"),
 					resource.TestCheckResourceAttr("ghost_repository.test", "visibility", "public"),
 					resource.TestCheckResourceAttr("ghost_repository.test", "private", "false"),
+					resource.TestCheckResourceAttrWith("ghost_repository.test", "html_url", func(v string) error {
+						if !strings.HasSuffix(v, "/"+renamed) {
+							return fmt.Errorf("html_url %q was not re-read after the rename", v)
+						}
+						return nil
+					}),
+					testAccCheckRepositoryRemote(renamed, strPtr("updated"), "public"),
 				),
 			},
 			{
 				// Removing the description clears it remotely.
-				Config: testAccRepositoryConfig(renamed, `visibility = "public"`),
+				Config:            testAccRepositoryConfig(renamed, `visibility = "public"`),
+				ConfigPlanChecks:  expectAction(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: repoIDCheck(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckNoResourceAttr("ghost_repository.test", "description"),
+					testAccCheckRepositoryRemote(renamed, nil, "public"),
 				),
 			},
 		},
@@ -197,12 +230,53 @@ resource "ghost_repository" "test" {
 `, name, extra)
 }
 
-func testAccCheckRepositoryDestroy(s *terraform.State) error {
+// testAccClient returns an API client configured from the environment.
+func testAccClient() (*client.Client, error) {
 	baseURL := os.Getenv(envBaseURL)
 	if baseURL == "" {
 		baseURL = client.DefaultBaseURL
 	}
-	c, err := client.New(baseURL, os.Getenv(envToken))
+
+	return client.New(baseURL, os.Getenv(envToken))
+}
+
+// testAccCheckRepositoryRemote verifies, straight from the API, that the
+// repository in state has the given slug, description (nil or "" for none)
+// and visibility.
+func testAccCheckRepositoryRemote(slug string, description *string, visibility string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources["ghost_repository.test"]
+		if !ok {
+			return fmt.Errorf("ghost_repository.test not in state")
+		}
+		c, err := testAccClient()
+		if err != nil {
+			return err
+		}
+		repo, err := c.GetRepository(context.Background(), rs.Primary.Attributes["owner"], slug)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", slug, err)
+		}
+
+		gotDesc := ""
+		if repo.Description != nil {
+			gotDesc = *repo.Description
+		}
+		wantDesc := ""
+		if description != nil {
+			wantDesc = *description
+		}
+		if repo.Name != slug || gotDesc != wantDesc || repo.Visibility != visibility {
+			return fmt.Errorf("remote name/description/visibility = %q/%q/%q, want %q/%q/%q",
+				repo.Name, gotDesc, repo.Visibility, slug, wantDesc, visibility)
+		}
+
+		return nil
+	}
+}
+
+func testAccCheckRepositoryDestroy(s *terraform.State) error {
+	c, err := testAccClient()
 	if err != nil {
 		return err
 	}

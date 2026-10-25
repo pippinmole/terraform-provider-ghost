@@ -88,9 +88,12 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				MarkdownDescription: "The user or organization that owns the repository. Defaults to the authenticated user. Changing it forces a new repository.",
 				Optional:            true,
 				Computed:            true,
+				// UseStateForUnknown must run first: when owner is omitted the
+				// framework marks it unknown on any change, and RequiresReplace
+				// would treat that as a new owner.
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"description": schema.StringAttribute{
@@ -290,8 +293,8 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 				fmt.Sprintf("Repository %s/%s was created but setting default_branch to %q failed: %s", owner, slug, branch, err))
 			return
 		}
-		r.refresh(ctx, &plan, owner, slug, resp.Diagnostics.AddError)
-		if resp.Diagnostics.HasError() {
+		if err := r.refresh(ctx, &plan, owner, slug); err != nil {
+			resp.Diagnostics.AddError("Error reading repository after setting default branch", err.Error())
 			return
 		}
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -367,12 +370,34 @@ func (r *RepositoryResource) Update(ctx context.Context, req resource.UpdateRequ
 		}
 	}
 
-	r.refresh(ctx, &plan, owner, slug, resp.Diagnostics.AddError)
-	if resp.Diagnostics.HasError() {
+	if err := r.refresh(ctx, &plan, owner, slug); err != nil {
+		resp.Diagnostics.AddError("Error reading repository after update", err.Error())
+		if changed {
+			// The PATCH applied, so record what is known (notably a new slug)
+			// rather than leaving state pointing at the old URL.
+			resp.Diagnostics.Append(resp.State.Set(ctx, state.withAppliedUpdate(plan, owner, slug))...)
+		}
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// withAppliedUpdate returns m (the prior state) with the updatable arguments
+// from plan and the owner/slug returned by the update applied. Every value
+// stays known, so it can be saved when the post-update read fails.
+func (m repositoryResourceModel) withAppliedUpdate(plan repositoryResourceModel, owner, slug string) *repositoryResourceModel {
+	m.Name = plan.Name
+	m.Description = plan.Description
+	m.Visibility = plan.Visibility
+	if !plan.DefaultBranch.IsUnknown() {
+		m.DefaultBranch = plan.DefaultBranch
+	}
+	m.Slug = types.StringValue(slug)
+	m.FullName = types.StringValue(owner + "/" + slug)
+	m.ID = m.FullName
+
+	return &m
 }
 
 func (r *RepositoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -412,17 +437,17 @@ func (r *RepositoryResource) ImportState(ctx context.Context, req resource.Impor
 
 // refresh re-reads owner/slug into m after a write. The configured name and
 // description in m are kept, since the API accepted them.
-func (r *RepositoryResource) refresh(ctx context.Context, m *repositoryResourceModel, owner, slug string, addError func(string, string)) {
+func (r *RepositoryResource) refresh(ctx context.Context, m *repositoryResourceModel, owner, slug string) error {
 	repo, err := r.client.GetRepository(ctx, owner, slug)
 	if err != nil {
-		addError("Error reading repository after update", err.Error())
-		return
+		return err
 	}
 	if err := m.fromRemote(repo); err != nil {
-		addError("Error reading repository after update", err.Error())
-		return
+		return err
 	}
 	m.Description = repositoryDescriptionFromRemote(m.Description, repo.Description)
+
+	return nil
 }
 
 // fromRemote copies the API-derived attributes of repo into m. It leaves
