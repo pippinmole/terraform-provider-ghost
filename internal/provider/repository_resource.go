@@ -80,7 +80,7 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				PlanModifiers:       stableString,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The repository name. Ghost derives the slug from it, so renaming also changes `slug` and the repository URL.",
+				MarkdownDescription: "The repository name. Ghost derives the slug from it, so renaming also changes `slug` and the repository URL. The Ghost API reports the slug rather than the display name, so importing a repository whose display name differs from its slug shows a one-time in-place rename.",
 				Required:            true,
 				Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 			},

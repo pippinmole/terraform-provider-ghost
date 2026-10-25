@@ -42,7 +42,7 @@ Tracks what the provider implements against the [Ghost API](https://api.ghost.pr
 | ------ | ---- | ----- |
 | ✅ | Provider configuration | `token` (`GHOST_TOKEN`), `base_url` (`GHOST_BASE_URL`, default `https://api.ghost.procrastinator.fyi`) |
 | ✅ | Typed API client (`internal/client`) | Supports both API surfaces, typed errors, `IsNotFound` |
-| ❌ | Acceptance test harness | `TF_ACC` tests against live Ghost; skip helper for ⚠️ items; sweepers (need native repository delete ⚠️) |
+| ✅ | Acceptance test harness | `TF_ACC` tests against live Ghost; skip helper for ⚠️ items; sweepers (need native repository delete ⚠️) |
 | ❌ | First release on the Terraform Registry | Needs a GPG key and the `GPG_PRIVATE_KEY` / `PASSPHRASE` repo secrets |
 
 ## Tier 1: implement first
@@ -51,8 +51,8 @@ Core value: the repository and what people configure on it straight away.
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 1 | ❌ | `ghost_repository` | resource | mixed | ⚠️ update and delete. Create: v3 `POST /user/repos` or `/orgs/{org}/repos` (`name`, `description`, `visibility`, `auto_init`, `gitignore_template`, `license_template`, the last three create-only). Read: v3 `GET /repos/{owner}/{repo}`. Update: native `PATCH /api/repositories/{u}/{slug}` (`name`, `description`, `visibility`). Delete: native `DELETE` (409 if it heads an open cross-repo PR). Import `owner/slug`. `owner` change = ForceNew, not a transfer. Default `visibility` is `private` |
-| 2 | ❌ | `ghost_repository` | data source | v3 | `GET /repos/{owner}/{repo}` |
+| 1 | ✅ | `ghost_repository` | resource | mixed | ⚠️ update and delete. Create: v3 `POST /user/repos` or `/orgs/{org}/repos` (`name`, `description`, `visibility`, `auto_init`, `gitignore_template`, `license_template`, the last three create-only). Read: v3 `GET /repos/{owner}/{repo}`. Update: native `PATCH /api/repositories/{u}/{slug}` (`name`, `description`, `visibility`). Delete: native `DELETE` (409 if it heads an open cross-repo PR). Import `owner/slug`. `owner` change = ForceNew, not a transfer. Default `visibility` is `private` |
+| 2 | ✅ | `ghost_repository` | data source | v3 | `GET /repos/{owner}/{repo}` |
 | 3 | ❌ | `ghost_user` | data source | v3 | `GET /user` (current) or `/users/{login}` |
 | 4 | ❌ | `ghost_issue_label` | resource | v3 | Full CRUD on `/repos/{o}/{r}/labels[/{name}]`. Renames go through `new_name` in place. Strip a leading `#` from `color`, default `ededed`; name ≤ 50 chars, URL-encoded. Import `owner/repo:name` |
 | 5 | ❌ | `ghost_repository_ruleset` | resource | v3 | Ghost's only branch protection. CRUD on `/repos/{o}/{r}/rulesets[/{id}]`. v3 `PUT` is **partial**, so always send the full object. Patterns come back as `refs/heads/…` (`~DEFAULT_BRANCH`, `~ALL` allowed). `bypass_actors` only returned to admins. Team `actor_id` is a numeric id the native team endpoints don't expose. Import `owner/repo:id` |
