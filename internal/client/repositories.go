@@ -106,7 +106,7 @@ func (c *Client) DeleteRepository(ctx context.Context, owner, slug string) error
 func SplitFullName(fullName string) (owner, slug string, err error) {
 	parts := strings.Split(fullName, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid repository full name %q, expected \"owner/name\"", fullName)
+		return "", "", fmt.Errorf("invalid repository full name %q, expected \"owner/slug\"", fullName)
 	}
 
 	return parts[0], parts[1], nil

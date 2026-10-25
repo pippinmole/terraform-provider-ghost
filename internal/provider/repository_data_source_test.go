@@ -62,6 +62,9 @@ func TestRepositoryDataSourceConfigValidation(t *testing.T) {
   owner     = "alice"`, `(?s)full_name.*owner`},
 		{"neither form", `owner = "alice"`, `Exactly one of these attributes`},
 		{"nothing", ``, `Exactly one of these attributes`},
+		{"full_name without slash", `full_name = "alice"`, `must be "owner/slug"`},
+		{"full_name with extra segment", `full_name = "alice/repo/x"`, `must be "owner/slug"`},
+		{"full_name missing owner", `full_name = "/repo"`, `must be "owner/slug"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

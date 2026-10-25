@@ -51,7 +51,7 @@ Core value: the repository and what people configure on it straight away.
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 1 | ✅ | `ghost_repository` | resource | mixed | ⚠️ update and delete. Create: v3 `POST /user/repos` or `/orgs/{org}/repos` (`name`, `description`, `visibility`, `auto_init`, `gitignore_template`, `license_template`, the last three create-only). Read: v3 `GET /repos/{owner}/{repo}`. Update: native `PATCH /api/repositories/{u}/{slug}` (`name`, `description`, `visibility`). Delete: native `DELETE` (409 if it heads an open cross-repo PR). Import `owner/slug`. `owner` change = ForceNew, not a transfer. Default `visibility` is `private` |
+| 1 | ✅ | `ghost_repository` | resource | mixed | ⚠️ update and delete. Create: v3 `POST /user/repos` or `/orgs/{org}/repos` (`name`, `description`, `visibility`, `auto_init`, `gitignore_template`, `license_template`, the last three create-only). Read: v3 `GET /repos/{owner}/{repo}`. Update: native `PATCH /api/repositories/{u}/{slug}` (`name`, `description`, `visibility`, `default_branch`). Delete: native `DELETE` (409 if it heads an open cross-repo PR). Import `owner/slug`. `owner` change = ForceNew, not a transfer. Default `visibility` is `private` |
 | 2 | ✅ | `ghost_repository` | data source | v3 | `GET /repos/{owner}/{repo}` |
 | 3 | ❌ | `ghost_user` | data source | v3 | `GET /user` (current) or `/users/{login}` |
 | 4 | ❌ | `ghost_issue_label` | resource | v3 | Full CRUD on `/repos/{o}/{r}/labels[/{name}]`. Renames go through `new_name` in place. Strip a leading `#` from `color`, default `ededed`; name ≤ 50 chars, URL-encoded. Import `owner/repo:name` |

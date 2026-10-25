@@ -42,24 +42,14 @@ type RepositoryResource struct {
 
 // repositoryResourceModel maps the ghost_repository schema.
 type repositoryResourceModel struct {
-	ID                types.String `tfsdk:"id"`
+	repositoryRemoteModel
+
 	Name              types.String `tfsdk:"name"`
 	Owner             types.String `tfsdk:"owner"`
 	Description       types.String `tfsdk:"description"`
-	Visibility        types.String `tfsdk:"visibility"`
-	DefaultBranch     types.String `tfsdk:"default_branch"`
 	AutoInit          types.Bool   `tfsdk:"auto_init"`
 	GitignoreTemplate types.String `tfsdk:"gitignore_template"`
 	LicenseTemplate   types.String `tfsdk:"license_template"`
-	Slug              types.String `tfsdk:"slug"`
-	FullName          types.String `tfsdk:"full_name"`
-	RepoID            types.Int64  `tfsdk:"repo_id"`
-	NodeID            types.String `tfsdk:"node_id"`
-	HTMLURL           types.String `tfsdk:"html_url"`
-	CloneURL          types.String `tfsdk:"clone_url"`
-	SSHURL            types.String `tfsdk:"ssh_url"`
-	Private           types.Bool   `tfsdk:"private"`
-	Fork              types.Bool   `tfsdk:"fork"`
 }
 
 func (r *RepositoryResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -68,11 +58,14 @@ func (r *RepositoryResource) Metadata(_ context.Context, req resource.MetadataRe
 
 func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	stableString := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
-	createOnlyString := []planmodifier.String{stringplanmodifier.RequiresReplace()}
+	createOnlyString := []planmodifier.String{stringplanmodifier.RequiresReplaceIf(createOnlyStringReplace,
+		createOnlyDescription, createOnlyDescription)}
 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a Ghost repository.\n\n" +
-			"Repositories are created through the GitHub-compatible API and updated or deleted through the native API.",
+			"Repositories are created through the GitHub-compatible API and updated or deleted through Ghost's native API. " +
+			"The native API does not accept personal access tokens yet (this is expected to change), so until it does, " +
+			"updating or destroying a repository can fail with a 401 error.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The repository's full name, `owner/slug`.",
@@ -85,15 +78,17 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 			},
 			"owner": schema.StringAttribute{
-				MarkdownDescription: "The user or organization that owns the repository. Defaults to the authenticated user. Changing it forces a new repository.",
+				MarkdownDescription: "The user or organization that owns the repository. Defaults to the authenticated user. Changing it (other than its letter case) forces a new repository.",
 				Optional:            true,
 				Computed:            true,
 				// UseStateForUnknown must run first: when owner is omitted the
-				// framework marks it unknown on any change, and RequiresReplace
-				// would treat that as a new owner.
+				// framework marks it unknown on any change, and the replace
+				// check would treat that as a new owner.
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIf(ownerReplace,
+						"Changing the owner, other than its letter case, forces a new repository.",
+						"Changing the owner, other than its letter case, forces a new repository."),
 				},
 			},
 			"description": schema.StringAttribute{
@@ -115,17 +110,18 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 			},
 			"auto_init": schema.BoolAttribute{
-				MarkdownDescription: "Create an initial commit when the repository is created. Changing it forces a new repository.",
+				MarkdownDescription: "Create an initial commit when the repository is created. Changing it forces a new repository, except when it was unset (e.g. after import).",
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplaceIf(createOnlyBoolReplace,
+					createOnlyDescription, createOnlyDescription)},
 			},
 			"gitignore_template": schema.StringAttribute{
-				MarkdownDescription: "A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository.",
+				MarkdownDescription: "A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository, except when it was unset (e.g. after import).",
 				Optional:            true,
 				PlanModifiers:       createOnlyString,
 			},
 			"license_template": schema.StringAttribute{
-				MarkdownDescription: "A license template to apply at creation, e.g. `mit`. Changing it forces a new repository.",
+				MarkdownDescription: "A license template to apply at creation, e.g. `mit`. Changing it forces a new repository, except when it was unset (e.g. after import).",
 				Optional:            true,
 				PlanModifiers:       createOnlyString,
 			},
@@ -241,7 +237,7 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	org := ""
+	org, login := "", ""
 	if owner := plan.Owner.ValueString(); owner != "" {
 		user, err := r.client.GetAuthenticatedUser(ctx)
 		if err != nil {
@@ -249,7 +245,8 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 				"Could not determine whether owner "+owner+" is the authenticated user: "+err.Error())
 			return
 		}
-		if !strings.EqualFold(owner, user.Login) {
+		login = user.Login
+		if !strings.EqualFold(owner, login) {
 			org = owner
 		}
 	}
@@ -275,7 +272,9 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 	// state (tainted) rather than orphaned.
 	wantBranch := plan.DefaultBranch
 	if err := plan.fromRemote(repo); err != nil {
-		resp.Diagnostics.AddError("Error reading created repository", err.Error())
+		resp.Diagnostics.AddError("Error reading created repository",
+			"The repository was created, but its response could not be read: "+err.Error())
+		r.saveCreatedFallback(ctx, resp, plan, repo, org, login)
 		return
 	}
 	plan.Description = repositoryDescriptionFromRemote(plan.Description, repo.Description)
@@ -299,6 +298,37 @@ func (r *RepositoryResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	}
+}
+
+// saveCreatedFallback records a just-created repository whose response had an
+// unusable full_name, so it is tracked (and tainted) rather than orphaned. The
+// owner comes from the response, the requested org, or the authenticated user,
+// and the slug from the response's name, which the v3 API sets to the slug.
+func (r *RepositoryResource) saveCreatedFallback(ctx context.Context, resp *resource.CreateResponse,
+	plan repositoryResourceModel, repo *client.Repository, org, login string) {
+	owner := repo.Owner.Login
+	if owner == "" {
+		owner = org
+	}
+	if owner == "" && login == "" {
+		if user, err := r.client.GetAuthenticatedUser(ctx); err == nil {
+			login = user.Login
+		}
+	}
+	if owner == "" {
+		owner = login
+	}
+	if owner == "" || repo.Name == "" {
+		resp.Diagnostics.AddError("Repository may be orphaned",
+			fmt.Sprintf("Could not work out the created repository's owner and slug, so it is not in Terraform state. "+
+				"Find it in Ghost (requested name %q) and import or delete it.", plan.Name.ValueString()))
+		return
+	}
+
+	plan.set(repo, owner, repo.Name)
+	plan.keepOwnerCase(owner)
+	plan.Description = repositoryDescriptionFromRemote(plan.Description, repo.Description)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *RepositoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -390,6 +420,7 @@ func (m repositoryResourceModel) withAppliedUpdate(plan repositoryResourceModel,
 	m.Name = plan.Name
 	m.Description = plan.Description
 	m.Visibility = plan.Visibility
+	m.Private = types.BoolValue(plan.Visibility.ValueString() == "private")
 	if !plan.DefaultBranch.IsUnknown() {
 		m.DefaultBranch = plan.DefaultBranch
 	}
@@ -454,28 +485,43 @@ func (r *RepositoryResource) refresh(ctx context.Context, m *repositoryResourceM
 // name, description and the create-only arguments alone, and keeps the
 // configured owner when it matches the remote one apart from case.
 func (m *repositoryResourceModel) fromRemote(repo *client.Repository) error {
-	owner, slug, err := client.SplitFullName(repo.FullName)
+	owner, err := m.repositoryRemoteModel.fromRemote(repo)
 	if err != nil {
 		return err
 	}
+	m.keepOwnerCase(owner)
 
-	m.ID = types.StringValue(repo.FullName)
-	m.FullName = types.StringValue(repo.FullName)
+	return nil
+}
+
+// keepOwnerCase sets owner unless m already holds it in another letter case;
+// logins are case-insensitive, and keeping the configured spelling avoids a
+// diff.
+func (m *repositoryResourceModel) keepOwnerCase(owner string) {
 	if m.Owner.IsNull() || m.Owner.IsUnknown() || !strings.EqualFold(m.Owner.ValueString(), owner) {
 		m.Owner = types.StringValue(owner)
 	}
-	m.Slug = types.StringValue(slug)
-	m.RepoID = types.Int64Value(repo.ID)
-	m.NodeID = types.StringValue(repo.NodeID)
-	m.HTMLURL = types.StringValue(repo.HTMLURL)
-	m.CloneURL = types.StringValue(repo.CloneURL)
-	m.SSHURL = types.StringValue(repo.SSHURL)
-	m.Private = types.BoolValue(repo.Private)
-	m.Fork = types.BoolValue(repo.Fork)
-	m.Visibility = types.StringValue(repo.Visibility)
-	m.DefaultBranch = types.StringValue(repo.DefaultBranch)
+}
 
-	return nil
+const createOnlyDescription = "Changing this forces a new repository, unless it was previously unset (e.g. after import)."
+
+// createOnlyStringReplace forces replacement when a create-only argument
+// changes, except from null: after an import these are null in state, and
+// adopting the configured value must not recreate the repository.
+func createOnlyStringReplace(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.StateValue.IsNull()
+}
+
+// createOnlyBoolReplace is createOnlyStringReplace for bool arguments.
+func createOnlyBoolReplace(_ context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.StateValue.IsNull()
+}
+
+// ownerReplace forces replacement when the owner really changes. Logins are
+// case-insensitive, so a change of letter case alone is applied in place.
+func ownerReplace(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = req.PlanValue.IsUnknown() || req.StateValue.IsNull() ||
+		!strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString())
 }
 
 // repositoryNameFromRemote decides the name to keep in state after a read.

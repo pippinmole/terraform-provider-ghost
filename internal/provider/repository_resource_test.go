@@ -217,6 +217,16 @@ func TestAccRepositoryResource(t *testing.T) {
 					testAccCheckRepositoryRemote(renamed, nil, "public"),
 				),
 			},
+			{
+				// Setting a create-only argument that was unset (as after an
+				// import) adopts it in place instead of recreating the repo.
+				Config: testAccRepositoryConfig(renamed, `
+  visibility       = "public"
+  license_template = "mit"`),
+				ConfigPlanChecks:  expectAction(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: repoIDCheck(),
+				Check:             resource.TestCheckResourceAttr("ghost_repository.test", "license_template", "mit"),
+			},
 		},
 	})
 }

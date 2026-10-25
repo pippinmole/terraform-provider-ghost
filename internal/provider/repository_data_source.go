@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
@@ -22,6 +23,9 @@ var (
 	_ datasource.DataSourceWithConfigValidators = &RepositoryDataSource{}
 )
 
+// fullNamePattern matches an "owner/slug" repository full name.
+var fullNamePattern = regexp.MustCompile(`^[^/]+/[^/]+$`)
+
 // NewRepositoryDataSource returns the ghost_repository data source.
 func NewRepositoryDataSource() datasource.DataSource {
 	return &RepositoryDataSource{}
@@ -34,24 +38,14 @@ type RepositoryDataSource struct {
 
 // repositoryDataSourceModel maps the ghost_repository data source schema.
 type repositoryDataSourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	FullName      types.String `tfsdk:"full_name"`
-	Owner         types.String `tfsdk:"owner"`
-	Name          types.String `tfsdk:"name"`
-	Slug          types.String `tfsdk:"slug"`
-	RepoID        types.Int64  `tfsdk:"repo_id"`
-	NodeID        types.String `tfsdk:"node_id"`
-	Description   types.String `tfsdk:"description"`
-	Visibility    types.String `tfsdk:"visibility"`
-	Private       types.Bool   `tfsdk:"private"`
-	Fork          types.Bool   `tfsdk:"fork"`
-	HTMLURL       types.String `tfsdk:"html_url"`
-	CloneURL      types.String `tfsdk:"clone_url"`
-	SSHURL        types.String `tfsdk:"ssh_url"`
-	DefaultBranch types.String `tfsdk:"default_branch"`
-	CreatedAt     types.String `tfsdk:"created_at"`
-	UpdatedAt     types.String `tfsdk:"updated_at"`
-	PushedAt      types.String `tfsdk:"pushed_at"`
+	repositoryRemoteModel
+
+	Owner       types.String `tfsdk:"owner"`
+	Name        types.String `tfsdk:"name"`
+	Description types.String `tfsdk:"description"`
+	CreatedAt   types.String `tfsdk:"created_at"`
+	UpdatedAt   types.String `tfsdk:"updated_at"`
+	PushedAt    types.String `tfsdk:"pushed_at"`
 }
 
 func (d *RepositoryDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -72,7 +66,9 @@ func (d *RepositoryDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 				MarkdownDescription: "The repository's full name, `owner/slug`. Set this, or `name` (and optionally `owner`), to choose the repository to look up.",
 				Optional:            true,
 				Computed:            true,
-				Validators:          nonEmpty,
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(fullNamePattern, `must be "owner/slug", e.g. "alice/my-repo"`),
+				},
 			},
 			"owner": schema.StringAttribute{
 				MarkdownDescription: "The user or organization that owns the repository. When looking up by `name`, defaults to the authenticated user. Cannot be combined with `full_name`.",
@@ -222,26 +218,14 @@ func (d *RepositoryDataSource) Read(ctx context.Context, req datasource.ReadRequ
 // from the response's full name, since a renamed repository's old name
 // redirects to the new one.
 func (m *repositoryDataSourceModel) fromRemote(repo *client.Repository) error {
-	owner, slug, err := client.SplitFullName(repo.FullName)
+	owner, err := m.repositoryRemoteModel.fromRemote(repo)
 	if err != nil {
 		return err
 	}
 
-	m.ID = types.StringValue(repo.FullName)
-	m.FullName = types.StringValue(repo.FullName)
 	m.Owner = types.StringValue(owner)
 	m.Name = types.StringValue(repo.Name)
-	m.Slug = types.StringValue(slug)
-	m.RepoID = types.Int64Value(repo.ID)
-	m.NodeID = types.StringValue(repo.NodeID)
 	m.Description = repositoryDescriptionFromRemote(types.StringNull(), repo.Description)
-	m.Visibility = types.StringValue(repo.Visibility)
-	m.Private = types.BoolValue(repo.Private)
-	m.Fork = types.BoolValue(repo.Fork)
-	m.HTMLURL = types.StringValue(repo.HTMLURL)
-	m.CloneURL = types.StringValue(repo.CloneURL)
-	m.SSHURL = types.StringValue(repo.SSHURL)
-	m.DefaultBranch = types.StringValue(repo.DefaultBranch)
 	m.CreatedAt = types.StringValue(repo.CreatedAt)
 	m.UpdatedAt = types.StringValue(repo.UpdatedAt)
 	m.PushedAt = types.StringNull()

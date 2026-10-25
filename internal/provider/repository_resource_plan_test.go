@@ -14,6 +14,13 @@ import (
 // values, returning the paths that force replacement and the planned values.
 func planRepository(t *testing.T, config map[string]tftypes.Value) ([]*tftypes.AttributePath, map[string]tftypes.Value) {
 	t.Helper()
+
+	return planRepositoryFrom(t, nil, config)
+}
+
+// planRepositoryFrom is planRepository with some prior state values replaced.
+func planRepositoryFrom(t *testing.T, priorOverrides, config map[string]tftypes.Value) ([]*tftypes.AttributePath, map[string]tftypes.Value) {
+	t.Helper()
 	ctx := context.Background()
 
 	server, err := testAccProtoV6ProviderFactories["ghost"]()
@@ -36,6 +43,9 @@ func planRepository(t *testing.T, config map[string]tftypes.Value) ([]*tftypes.A
 		"slug": str("old"), "full_name": str("alice/old"), "repo_id": tftypes.NewValue(tftypes.Number, 1),
 		"node_id": str("R1"), "html_url": str("h"), "clone_url": str("c"), "ssh_url": str(""),
 		"private": tftypes.NewValue(tftypes.Bool, true), "fork": tftypes.NewValue(tftypes.Bool, false),
+	}
+	for k, v := range priorOverrides {
+		prior[k] = v
 	}
 	optionalOnly := map[string]bool{"description": true, "auto_init": true, "gitignore_template": true, "license_template": true}
 
@@ -144,15 +154,76 @@ func TestRepositoryPlanOwnerChangeForcesReplacement(t *testing.T) {
 	t.Fatalf("RequiresReplace = %v, want owner", replace)
 }
 
+func TestRepositoryPlanAdoptsCreateOnlyArgumentsAfterImport(t *testing.T) {
+	// After an import the create-only arguments are null in state; setting
+	// them in config must not recreate the repository.
+	replace, planned := planRepository(t, map[string]tftypes.Value{
+		"auto_init":          tftypes.NewValue(tftypes.Bool, true),
+		"gitignore_template": tftypes.NewValue(tftypes.String, "Go"),
+		"license_template":   tftypes.NewValue(tftypes.String, "mit"),
+	})
+	if len(replace) != 0 {
+		t.Fatalf("adopting create-only arguments must not force replacement, got RequiresReplace %v", replace)
+	}
+	if !planned["license_template"].Equal(tftypes.NewValue(tftypes.String, "mit")) {
+		t.Errorf("license_template = %v, want mit", planned["license_template"])
+	}
+}
+
+func TestRepositoryPlanChangingCreateOnlyArgumentsForcesReplacement(t *testing.T) {
+	prior := map[string]tftypes.Value{
+		"auto_init":        tftypes.NewValue(tftypes.Bool, true),
+		"license_template": tftypes.NewValue(tftypes.String, "mit"),
+	}
+	replace, _ := planRepositoryFrom(t, prior, map[string]tftypes.Value{
+		"auto_init":        tftypes.NewValue(tftypes.Bool, false),
+		"license_template": tftypes.NewValue(tftypes.String, "apache-2.0"),
+	})
+	for _, attr := range []string{"auto_init", "license_template"} {
+		if !containsPath(replace, attr) {
+			t.Errorf("RequiresReplace = %v, want %s", replace, attr)
+		}
+	}
+}
+
+func TestRepositoryPlanOwnerCaseChangeIsInPlace(t *testing.T) {
+	replace, planned := planRepository(t, map[string]tftypes.Value{
+		"owner": tftypes.NewValue(tftypes.String, "Alice"),
+	})
+	if len(replace) != 0 {
+		t.Fatalf("owner case change must not force replacement, got RequiresReplace %v", replace)
+	}
+	if !planned["owner"].Equal(tftypes.NewValue(tftypes.String, "Alice")) {
+		t.Errorf("owner = %v, want the configured Alice", planned["owner"])
+	}
+}
+
+func containsPath(paths []*tftypes.AttributePath, attr string) bool {
+	want := tftypes.NewAttributePath().WithAttributeName(attr)
+	for _, p := range paths {
+		if p.Equal(want) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func TestRepositoryWithAppliedUpdate(t *testing.T) {
 	state := repositoryResourceModel{
-		ID: types.StringValue("alice/old"), FullName: types.StringValue("alice/old"), Slug: types.StringValue("old"),
-		Name: types.StringValue("old"), Description: types.StringNull(), Visibility: types.StringValue("private"),
-		DefaultBranch: types.StringValue("main"), HTMLURL: types.StringValue("h"),
+		repositoryRemoteModel: repositoryRemoteModel{
+			ID: types.StringValue("alice/old"), FullName: types.StringValue("alice/old"), Slug: types.StringValue("old"),
+			Visibility: types.StringValue("private"), Private: types.BoolValue(true),
+			DefaultBranch: types.StringValue("main"), HTMLURL: types.StringValue("h"),
+		},
+		Name: types.StringValue("old"), Description: types.StringNull(),
 	}
 	plan := repositoryResourceModel{
-		Name: types.StringValue("New"), Description: types.StringValue("d"), Visibility: types.StringValue("public"),
-		DefaultBranch: types.StringUnknown(), HTMLURL: types.StringUnknown(),
+		repositoryRemoteModel: repositoryRemoteModel{
+			Visibility: types.StringValue("public"), Private: types.BoolUnknown(),
+			DefaultBranch: types.StringUnknown(), HTMLURL: types.StringUnknown(),
+		},
+		Name: types.StringValue("New"), Description: types.StringValue("d"),
 	}
 
 	got := state.withAppliedUpdate(plan, "alice", "new")
@@ -161,6 +232,9 @@ func TestRepositoryWithAppliedUpdate(t *testing.T) {
 	}
 	if got.Name.ValueString() != "New" || got.Description.ValueString() != "d" || got.Visibility.ValueString() != "public" {
 		t.Errorf("name/description/visibility = %s/%s/%s", got.Name, got.Description, got.Visibility)
+	}
+	if !got.Private.Equal(types.BoolValue(false)) {
+		t.Errorf("private = %s, want false for public visibility", got.Private)
 	}
 	if got.DefaultBranch.ValueString() != "main" || got.HTMLURL.ValueString() != "h" {
 		t.Errorf("unknown plan values must not overwrite state, got default_branch %s html_url %s", got.DefaultBranch, got.HTMLURL)

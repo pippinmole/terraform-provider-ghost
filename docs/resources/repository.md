@@ -4,14 +4,14 @@ page_title: "ghost_repository Resource - ghost"
 subcategory: ""
 description: |-
   Manages a Ghost repository.
-  Repositories are created through the GitHub-compatible API and updated or deleted through the native API.
+  Repositories are created through the GitHub-compatible API and updated or deleted through Ghost's native API. The native API does not accept personal access tokens yet (this is expected to change), so until it does, updating or destroying a repository can fail with a 401 error.
 ---
 
 # ghost_repository (Resource)
 
 Manages a Ghost repository.
 
-Repositories are created through the GitHub-compatible API and updated or deleted through the native API.
+Repositories are created through the GitHub-compatible API and updated or deleted through Ghost's native API. The native API does not accept personal access tokens yet (this is expected to change), so until it does, updating or destroying a repository can fail with a 401 error.
 
 ## Example Usage
 
@@ -45,12 +45,12 @@ resource "ghost_repository" "org" {
 
 ### Optional
 
-- `auto_init` (Boolean) Create an initial commit when the repository is created. Changing it forces a new repository.
+- `auto_init` (Boolean) Create an initial commit when the repository is created. Changing it forces a new repository, except when it was unset (e.g. after import).
 - `default_branch` (String) The default branch. The branch must already exist, so on a new repository this usually needs `auto_init`.
 - `description` (String) A short description of the repository.
-- `gitignore_template` (String) A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository.
-- `license_template` (String) A license template to apply at creation, e.g. `mit`. Changing it forces a new repository.
-- `owner` (String) The user or organization that owns the repository. Defaults to the authenticated user. Changing it forces a new repository.
+- `gitignore_template` (String) A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository, except when it was unset (e.g. after import).
+- `license_template` (String) A license template to apply at creation, e.g. `mit`. Changing it forces a new repository, except when it was unset (e.g. after import).
+- `owner` (String) The user or organization that owns the repository. Defaults to the authenticated user. Changing it (other than its letter case) forces a new repository.
 - `visibility` (String) Either `public` or `private`. Defaults to `private`.
 
 ### Read-Only
