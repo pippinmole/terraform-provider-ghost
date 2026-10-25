@@ -31,7 +31,10 @@ func planRepositoryFrom(t *testing.T, priorOverrides, config map[string]tftypes.
 	if err != nil {
 		t.Fatal(err)
 	}
-	typ := schemaResp.ResourceSchemas["ghost_repository"].ValueType().(tftypes.Object)
+	typ, ok := schemaResp.ResourceSchemas["ghost_repository"].ValueType().(tftypes.Object)
+	if !ok {
+		t.Fatal("ghost_repository schema value type is not an object")
+	}
 
 	str := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
 	null := func(k string) tftypes.Value { return tftypes.NewValue(typ.AttributeTypes[k], nil) }
