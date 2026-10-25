@@ -108,7 +108,9 @@ func (p *GhostProvider) Configure(ctx context.Context, req provider.ConfigureReq
 }
 
 func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		NewRepositoryResource,
+	}
 }
 
 func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataSource {
