@@ -56,6 +56,18 @@ variable "collaborator" {
   default     = null
 }
 
+variable "team_maintainer" {
+  description = "Username of a member of var.organization to make a maintainer of the var.organization_team_id team with ghost_team_membership. Only organization members can join its teams, and they can't be invited with a token. Destroy removes them from the team. Leave null to skip it."
+  type        = string
+  default     = null
+}
+
+variable "team_member" {
+  description = "Username of another member of var.organization to add to the same team as an ordinary member, named by its slug. Must differ from var.team_maintainer. Leave null to skip it."
+  type        = string
+  default     = null
+}
+
 provider "ghost" {
   token    = var.ghost_token
   base_url = var.ghost_base_url
@@ -434,6 +446,32 @@ resource "ghost_repository_collaborator" "organization" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_team_membership, in each team form. Created only when
+# var.organization_team_id and the usernames are set. The users must already
+# be members of var.organization. Destroy takes them out of the team (not the
+# organization). Import with "<organization>:<team id or slug>:<username>".
+# ---------------------------------------------------------------------------
+
+# By team ID, as a maintainer.
+resource "ghost_team_membership" "maintainer" {
+  count = var.team_maintainer == null ? 0 : length(data.ghost_team.by_id)
+
+  organization = var.organization
+  team_id      = data.ghost_team.by_id[0].id
+  username     = var.team_maintainer
+  role         = "maintainer"
+}
+
+# By team slug, matched case-insensitively; role defaults to "member".
+resource "ghost_team_membership" "member" {
+  count = var.team_member == null ? 0 : length(data.ghost_team.by_id)
+
+  organization = var.organization
+  team_slug    = data.ghost_team.by_id[0].slug
+  username     = var.team_member
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -521,6 +559,16 @@ output "repository_collaborators" {
       { for r in ghost_repository_collaborator.full : "full" => r },
       { for r in ghost_repository_collaborator.organization : "organization" => r },
     ) : key => { id = c.id, role = c.role, status = c.status, expires_at = c.expires_at }
+  }
+}
+
+output "team_memberships" {
+  description = "The team memberships the playground manages, when var.team_maintainer or var.team_member is set."
+  value = {
+    for key, m in merge(
+      { for r in ghost_team_membership.maintainer : "maintainer" => r },
+      { for r in ghost_team_membership.member : "member" => r },
+    ) : key => { id = m.id, team_slug = m.team_slug, role = m.role }
   }
 }
 

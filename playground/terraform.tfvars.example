@@ -23,3 +23,10 @@ ghost_token = "ghost_pat_..."
 # with ghost_repository_collaborator. The invitation stays pending unless they
 # accept it, and destroy withdraws it.
 # collaborator = "octocat"
+
+# Optional: usernames of members of that organization to add to that team with
+# ghost_team_membership, one as a maintainer (by team ID) and one as a member
+# (by team slug). Only organization members can join its teams, and they can't
+# be invited with a token. Destroy takes them out of the team again.
+# team_maintainer = "alice"
+# team_member     = "bob"
