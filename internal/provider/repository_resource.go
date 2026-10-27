@@ -101,7 +101,7 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Validators:          []validator.String{stringvalidator.OneOf("public", "private")},
 			},
 			"default_branch": schema.StringAttribute{
-				MarkdownDescription: "The default branch. The branch must already exist, so on a new repository this usually needs `auto_init`.",
+				MarkdownDescription: "The default branch. The branch must already exist, so on a new repository this usually needs `auto_init`. `ghost_branch_default` manages the same setting: use one or the other, not both. Use `ghost_branch_default` to make a branch created with `ghost_branch` the default, and leave this unset.",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers:       stableString,

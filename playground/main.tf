@@ -266,6 +266,31 @@ resource "ghost_branch" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_branch_default (resource)
+# ---------------------------------------------------------------------------
+
+# ghost_repository.full sets default_branch itself, and the two must not
+# manage the same repository, so this uses a repository of its own that
+# leaves default_branch unset.
+resource "ghost_repository" "default_branch" {
+  name      = "${var.name_prefix}-default-branch"
+  auto_init = true
+}
+
+resource "ghost_branch" "trunk" {
+  repository = ghost_repository.default_branch.full_name
+  branch     = "trunk"
+}
+
+# Every argument. Referencing the ghost_branch creates it first; destroying
+# this sets the default back to main (previous_branch) before the branch is
+# deleted. Import it with "<owner>/<slug>".
+resource "ghost_branch_default" "full" {
+  repository = ghost_repository.default_branch.full_name
+  branch     = ghost_branch.trunk.branch
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -273,7 +298,7 @@ output "repositories" {
   description = "The repositories the playground manages."
   value = {
     for key, repo in merge(
-      { minimal = ghost_repository.minimal, full = ghost_repository.full },
+      { minimal = ghost_repository.minimal, full = ghost_repository.full, default_branch = ghost_repository.default_branch },
       { for r in ghost_repository.organization : "organization" => r },
     ) : key => { full_name = repo.full_name, visibility = repo.visibility, html_url = repo.html_url }
   }
@@ -306,7 +331,16 @@ output "branches" {
     for key, b in {
       minimal = ghost_branch.minimal
       full    = ghost_branch.full
+      trunk   = ghost_branch.trunk
     } : key => { id = b.id, sha = b.sha }
+  }
+}
+
+output "default_branch" {
+  description = "The default branch ghost_branch_default set, and the one destroying it restores."
+  value = {
+    branch          = ghost_branch_default.full.branch
+    previous_branch = ghost_branch_default.full.previous_branch
   }
 }
 
