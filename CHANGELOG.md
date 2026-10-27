@@ -8,6 +8,7 @@ FEATURES:
 * **New Resource:** `ghost_repository_ruleset`
 * **New Resource:** `ghost_branch`
 * **New Resource:** `ghost_branch_default`
+* **New Resource:** `ghost_repository_webhook`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 
