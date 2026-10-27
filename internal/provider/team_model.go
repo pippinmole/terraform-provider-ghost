@@ -12,6 +12,16 @@ import (
 	"github.com/pippinmole/terraform-provider-ghost/internal/client"
 )
 
+// organizationTeamAttrTypes is the object type of one element of the teams of
+// ghost_organization_teams.
+var organizationTeamAttrTypes = map[string]attr.Type{
+	"id":               types.StringType,
+	"slug":             types.StringType,
+	"name":             types.StringType,
+	"member_count":     types.Int64Type,
+	"repository_count": types.Int64Type,
+}
+
 // teamMemberAttrTypes is the object type of one element of a team's members.
 var teamMemberAttrTypes = map[string]attr.Type{
 	"username":   types.StringType,
@@ -140,4 +150,23 @@ func teamRepositoriesValue(org string, repos []client.TeamRepository) (types.Lis
 	}
 
 	return types.ListValue(types.ObjectType{AttrTypes: teamRepositoryAttrTypes}, elems)
+}
+
+// teamSummariesValue converts teams to a list sorted by slug.
+func teamSummariesValue(teams []client.TeamSummary) (types.List, diag.Diagnostics) {
+	teams = slices.Clone(teams)
+	slices.SortFunc(teams, func(a, b client.TeamSummary) int { return cmp.Compare(a.Slug, b.Slug) })
+
+	elems := make([]attr.Value, 0, len(teams))
+	for _, t := range teams {
+		elems = append(elems, types.ObjectValueMust(organizationTeamAttrTypes, map[string]attr.Value{
+			"id":               types.StringValue(t.ID),
+			"slug":             types.StringValue(t.Slug),
+			"name":             types.StringValue(t.Name),
+			"member_count":     types.Int64Value(t.MemberCount),
+			"repository_count": types.Int64Value(t.RepositoryCount),
+		}))
+	}
+
+	return types.ListValue(types.ObjectType{AttrTypes: organizationTeamAttrTypes}, elems)
 }
