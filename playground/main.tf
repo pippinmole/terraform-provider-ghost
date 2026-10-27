@@ -241,6 +241,31 @@ resource "ghost_repository_ruleset" "organization" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_branch (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: a branch started at the default branch. The repository
+# needs a commit to branch from, which auto_init provides.
+resource "ghost_branch" "minimal" {
+  repository = ghost_repository.full.full_name
+  branch     = "development"
+}
+
+# Every argument. source is a branch here, but a tag or commit SHA also
+# works. The "/" is escaped in the API path; import it with
+# "<owner>/<slug>:release/1.x".
+resource "ghost_branch" "full" {
+  repository = ghost_repository.full.full_name
+  branch     = "release/1.x"
+  source     = ghost_branch.minimal.branch
+
+  # Recreate the branch if the repository is replaced, not when it's renamed.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -272,6 +297,16 @@ output "repository_rulesets" {
       { minimal = ghost_repository_ruleset.minimal, full = ghost_repository_ruleset.full },
       { for r in ghost_repository_ruleset.organization : "organization" => r },
     ) : key => { id = rs.id, ruleset_id = rs.ruleset_id, enforcement = rs.enforcement }
+  }
+}
+
+output "branches" {
+  description = "The branches the playground manages."
+  value = {
+    for key, b in {
+      minimal = ghost_branch.minimal
+      full    = ghost_branch.full
+    } : key => { id = b.id, sha = b.sha }
   }
 }
 
