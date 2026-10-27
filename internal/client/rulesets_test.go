@@ -162,23 +162,6 @@ func TestIsConflict(t *testing.T) {
 	}
 }
 
-func TestListOrganizationTeams(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/organizations/pippin/teams" {
-			t.Errorf("got %s %s", r.Method, r.URL.Path)
-		}
-		_, _ = w.Write([]byte(`{"teams":[{"id":"DG4e","name":"Core","slug":"core","memberCount":1,"repositoryCount":0}]}`))
-	})
-
-	teams, err := c.ListOrganizationTeams(context.Background(), "pippin")
-	if err != nil {
-		t.Fatalf("ListOrganizationTeams: %v", err)
-	}
-	if len(teams) != 1 || teams[0].ID != "DG4e" || teams[0].Slug != "core" || teams[0].Name != "Core" {
-		t.Errorf("unexpected teams: %+v", teams)
-	}
-}
-
 func TestPullRequestParametersMarshal(t *testing.T) {
 	b, err := json.Marshal(PullRequestParameters{})
 	if err != nil {

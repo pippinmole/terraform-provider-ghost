@@ -72,15 +72,6 @@ type StatusCheck struct {
 	Context string `json:"context"`
 }
 
-// Team is a team in an organization.
-type Team struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Slug            string `json:"slug"`
-	MemberCount     int64  `json:"memberCount"`
-	RepositoryCount int64  `json:"repositoryCount"`
-}
-
 func rulesetPath(owner, repo string, id ...string) string {
 	return NativePath(append([]string{"repositories", owner, repo, "rulesets"}, id...)...)
 }
@@ -149,16 +140,4 @@ func (c *Client) ReplaceRuleset(ctx context.Context, owner, repo, id string, req
 // DeleteRuleset deletes the ruleset with the given id.
 func (c *Client) DeleteRuleset(ctx context.Context, owner, repo, id string) error {
 	return c.Do(ctx, http.MethodDelete, rulesetPath(owner, repo, id), nil, nil)
-}
-
-// ListOrganizationTeams returns the teams in the organization org.
-func (c *Client) ListOrganizationTeams(ctx context.Context, org string) ([]Team, error) {
-	var out struct {
-		Teams []Team `json:"teams"`
-	}
-	if err := c.Do(ctx, http.MethodGet, NativePath("organizations", org, "teams"), nil, &out); err != nil {
-		return nil, err
-	}
-
-	return out.Teams, nil
 }
