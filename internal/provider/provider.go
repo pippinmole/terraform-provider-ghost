@@ -112,6 +112,7 @@ func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource 
 		NewRepositoryResource,
 		NewIssueLabelResource,
 		NewRepositoryRulesetResource,
+		NewBranchResource,
 	}
 }
 
