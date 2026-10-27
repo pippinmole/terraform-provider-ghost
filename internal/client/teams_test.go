@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -88,5 +89,80 @@ func TestGetTeamByID(t *testing.T) {
 	_, err = c.GetTeamByID(context.Background(), "acme", "t1")
 	if !IsNotFound(err) || !strings.Contains(err.Error(), "no team with ID t1") {
 		t.Errorf("GetTeamByID of a missing ID: got %v, want a 404", err)
+	}
+}
+
+func TestListRepositoryTeams(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/repositories/acme/my%20repo/teams" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(`{"teams":[{"id":"T1","name":"Core","memberCount":2,"role":"write"},{"id":"T2","name":"Other","memberCount":0,"role":null}]}`))
+	})
+
+	teams, err := c.ListRepositoryTeams(context.Background(), "acme", "my repo")
+	if err != nil {
+		t.Fatalf("ListRepositoryTeams: %v", err)
+	}
+	if len(teams) != 2 || teams[0].ID != "T1" || teams[0].Name != "Core" || teams[0].MemberCount != 2 ||
+		teams[0].Role == nil || *teams[0].Role != "write" || teams[1].ID != "T2" || teams[1].Role != nil {
+		t.Errorf("unexpected teams: %+v", teams)
+	}
+}
+
+func TestListRepositoryTeamsUserRepository(t *testing.T) {
+	const msg = "Only an organization’s repositories can be shared with teams"
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"statusCode":400,"error":"Error","message":"` + msg + `"}`))
+	})
+
+	_, err := c.ListRepositoryTeams(context.Background(), "alice", "repo")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest || apiErr.Message != msg {
+		t.Errorf("ListRepositoryTeams error = %v, want a 400 with message %q", err, msg)
+	}
+}
+
+func TestSetRepositoryTeamRole(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.EscapedPath() != "/api/repositories/acme/repo/teams/T%2F1" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q", got)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if strings.TrimSpace(string(body)) != `{"role":"maintain"}` {
+			t.Errorf("body = %s", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	if err := c.SetRepositoryTeamRole(context.Background(), "acme", "repo", "T/1", "maintain"); err != nil {
+		t.Fatalf("SetRepositoryTeamRole: %v", err)
+	}
+}
+
+func TestRemoveRepositoryTeam(t *testing.T) {
+	calls := 0
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/repositories/acme/repo/teams/T1" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		if calls == 1 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"statusCode":404,"error":"Error","message":"Team not found in this organization"}`))
+	})
+
+	if err := c.RemoveRepositoryTeam(context.Background(), "acme", "repo", "T1"); err != nil {
+		t.Fatalf("RemoveRepositoryTeam: %v", err)
+	}
+	if err := c.RemoveRepositoryTeam(context.Background(), "acme", "repo", "T1"); !IsNotFound(err) {
+		t.Errorf("second RemoveRepositoryTeam error = %v, want a 404", err)
 	}
 }

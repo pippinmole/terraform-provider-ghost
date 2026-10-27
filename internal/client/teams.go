@@ -91,3 +91,43 @@ func (c *Client) GetTeamByID(ctx context.Context, org, id string) (*Team, error)
 		Message:    fmt.Sprintf("Team not found: no team with ID %s", id),
 	}
 }
+
+// RepositoryTeam is a team of a repository's organization with its role on
+// the repository. Role is nil when the team has no access.
+type RepositoryTeam struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	MemberCount int64   `json:"memberCount"`
+	Role        *string `json:"role"`
+}
+
+// ListRepositoryTeams returns every team in the organization that owns
+// owner/repo, each with its role on the repository. Only repository admins
+// may list them, and Ghost returns 400 for a repository a user owns.
+func (c *Client) ListRepositoryTeams(ctx context.Context, owner, repo string) ([]RepositoryTeam, error) {
+	var out struct {
+		Teams []RepositoryTeam `json:"teams"`
+	}
+	if err := c.Do(ctx, http.MethodGet, NativePath("repositories", owner, repo, "teams"), nil, &out); err != nil {
+		return nil, err
+	}
+
+	return out.Teams, nil
+}
+
+// SetRepositoryTeamRole gives the team with the given ID role on owner/repo,
+// or changes the role it has. Ghost takes the team's ID, not its slug, and
+// returns 404 "Team not found in this organization" for anything else.
+func (c *Client) SetRepositoryTeamRole(ctx context.Context, owner, repo, teamID, role string) error {
+	body := struct {
+		Role string `json:"role"`
+	}{Role: role}
+
+	return c.Do(ctx, http.MethodPut, NativePath("repositories", owner, repo, "teams", teamID), body, nil)
+}
+
+// RemoveRepositoryTeam removes the team's access to owner/repo. Ghost returns
+// 404 when the team has no access.
+func (c *Client) RemoveRepositoryTeam(ctx context.Context, owner, repo, teamID string) error {
+	return c.Do(ctx, http.MethodDelete, NativePath("repositories", owner, repo, "teams", teamID), nil, nil)
+}
