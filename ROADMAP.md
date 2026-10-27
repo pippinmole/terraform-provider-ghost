@@ -24,7 +24,9 @@ Tracks what the provider implements against the [Ghost API](https://api.ghost.pr
   `has_*`, archived, merge settings…), or you get perpetual diffs.
 - **Repository slugs aren't derived from names.** They're `slugify(name)`, plus a random suffix on collision, and they
   change on rename. Always store the slug the API returns and build URLs from it. Old owner/slug pairs redirect.
-- PATs are rate-limited to **120 requests per minute**.
+- PATs are rate-limited to **120 requests per minute**, in a fixed window shared by both surfaces. Every response
+  carries `X-RateLimit-*` headers, and a request over the limit gets a `429` with `Retry-After`. The client waits
+  out the limit and retries (any method, since a `429` request is never processed).
 
 ## Provider
 
