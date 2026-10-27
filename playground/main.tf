@@ -45,7 +45,7 @@ variable "organization" {
 }
 
 variable "organization_team_id" {
-  description = "ID of a team in var.organization, to add as a ruleset bypass actor. Leave null to skip it."
+  description = "ID of a team in var.organization, to add as a ruleset bypass actor and look up with ghost_team. Leave null to skip both."
   type        = string
   default     = null
 }
@@ -113,6 +113,28 @@ data "ghost_user" "me" {}
 
 data "ghost_user" "by_login" {
   login = data.ghost_user.me.login
+}
+
+# ---------------------------------------------------------------------------
+# ghost_team (data source), in each lookup form. Read only when
+# var.organization and var.organization_team_id are set: teams can't be
+# created with a token.
+# ---------------------------------------------------------------------------
+
+# By ID, which survives a rename of the team.
+data "ghost_team" "by_id" {
+  count = var.organization == null || var.organization_team_id == null ? 0 : 1
+
+  organization = var.organization
+  id           = var.organization_team_id
+}
+
+# By slug, which Ghost matches case-insensitively and changes on rename.
+data "ghost_team" "by_slug" {
+  count = length(data.ghost_team.by_id)
+
+  organization = var.organization
+  slug         = data.ghost_team.by_id[0].slug
 }
 
 # ---------------------------------------------------------------------------
@@ -396,5 +418,20 @@ output "data_sources_agree" {
     data.ghost_repository.by_name.repo_id == ghost_repository.minimal.repo_id,
     data.ghost_repository.by_owner_and_name.repo_id == ghost_repository.full.repo_id,
     data.ghost_user.by_login.user_id == data.ghost_user.me.user_id,
+    alltrue([for t in data.ghost_team.by_slug : t.id == data.ghost_team.by_id[0].id]),
+  ])
+}
+
+output "team" {
+  description = "The team looked up by ghost_team, when var.organization_team_id is set."
+  value = one([
+    for t in data.ghost_team.by_slug : {
+      id           = t.id
+      slug         = t.slug
+      name         = t.name
+      members      = [for m in t.members : m.username]
+      maintainers  = t.maintainers
+      repositories = { for r in t.repositories : r.full_name => r.role }
+    }
   ])
 }
