@@ -128,6 +128,13 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
+// IsConflict reports whether err is an APIError with a 409 status.
+func IsConflict(err error) bool {
+	var apiErr *APIError
+
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict
+}
+
 // Do sends a request to path (which must include its API prefix), JSON-encoding
 // body when non-nil and decoding the response into out when non-nil. A
 // rate-limited request is retried once the limit resets, up to maxRetries
