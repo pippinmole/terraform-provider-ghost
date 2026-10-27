@@ -86,7 +86,7 @@ Observed behaviour:
 - **`pull_request` parameters:**
   - Exactly the six keys shown. Unknown keys get a 400 ("Unrecognized key").
   - Ghost fills in defaults for keys left out: `false` for the booleans and all three merge methods. The default
-    `required_approving_review_count` was not observed, so the builder probes it (see "Left to the builder").
+    `required_approving_review_count` is `0` (see "Probe results").
   - `required_approving_review_count` can be at most 10. `allowed_merge_methods` must name at least one of
     `merge`, `squash`, `rebase`.
 - **`required_status_checks` parameters:**
@@ -283,21 +283,29 @@ Ghost's 422 message is clear enough to surface as is.
 - `go generate ./...`, and commit the regenerated docs. Give the resource doc an example that includes the
   `replace_triggered_by` note.
 
+## Probe results (2026-10-27)
+
+Probed live on a throwaway private repository (`tf-acc-ruleset-probe2`, deleted afterwards and confirmed 404):
+
+1. **Default approval count.** `pull_request` with `parameters: {}` stores `required_approving_review_count = 0`.
+   The schema default is `0`.
+2. **`required_check` order and duplicates.** `[b, a, a]` is stored as `[b, a, a]`: order kept, duplicates
+   kept. `required_check` stays a list, with no uniqueness validator.
+3. **Duplicate patterns.** `include = ["x", "x"]` is stored as `["refs/heads/x", "refs/heads/x"]`. Ghost keeps
+   them, so the plan-time uniqueness validator on `include`/`exclude` stays, as decided above.
+4. **Branch-only rules on a tag ruleset.** `target = "tag"` with `pull_request`, `required_status_checks` and
+   `required_linear_history` is accepted and all three are kept. No target-dependent validator is needed.
+5. **Old `owner/slug` after a rename.** `GET` on the ruleset (and the list) under the old name still returns
+   200. The resource always calls with the current `repository` value regardless.
+6. **Organization teams.** `GET /api/organizations/{org}/teams` returns
+   `{"teams": [{"id", "name", "slug", "memberCount", "repositoryCount"}]}`.
+
+Ghost's rule order, as returned: `creation`, `update`, `deletion`, `non_fast_forward`,
+`required_linear_history`, `required_signatures`, `pull_request`, `required_status_checks` (the last three
+confirmed in probe 4).
+
 ## Left to the builder
 
-- Probe whether the native ruleset routes follow a renamed repository's old `owner/slug`. Either way, the
-  resource always calls with the current `repository` value.
-- Probe Ghost's default `required_approving_review_count` and use it as the schema default.
-- Probe whether Ghost dedupes duplicate `required_check` contexts or keeps them. If it dedupes, validate uniqueness; otherwise
-  allow duplicates.
-- Probe whether duplicate `include`/`exclude` patterns are kept. If they're deduped, the uniqueness validator
-  above already covers it.
-- *(Design-author's call.)* Probe whether Ghost keeps the order of `required_check` entries. If it reorders
-  them, make `required_check` a set instead of a list.
-- *(Design-author's call.)* Probe what happens to `pull_request`, `required_status_checks` and
-  `required_linear_history` on a `target = "tag"` ruleset. If Ghost accepts and keeps them, do nothing. If it
-  rejects them, surface the API error. If it **silently drops** them, reject that config at plan time
-  (target-dependent validator, with unit and acceptance coverage), per the anti-goal above.
 - *(Design-author's call.)* Build on the rate-limit retries from PR #4 (`feat/client-rate-limiting`). The
   acceptance tests share the 120/min budget. Rebase this branch onto `main` once #4 merges. If it hasn't
   merged by the time acceptance tests run, rebase onto `feat/client-rate-limiting` and open the PR against
