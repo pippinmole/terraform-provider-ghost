@@ -127,8 +127,13 @@ resource "ghost_repository_ruleset" "example" {
   name        = "protect-main"                        # required, 1–100 chars
   target      = "branch"                              # optional, default "branch"; "branch" | "tag"
   enforcement = "active"                              # required; "active" | "evaluate" | "disabled"
-  include     = ["~DEFAULT_BRANCH", "release/*"]      # optional list, default []
-  exclude     = ["release/old"]                       # optional list, default []
+
+  conditions = {                                      # optional; null = no patterns
+    ref_name = {                                      # required within conditions
+      include = ["~DEFAULT_BRANCH", "release/*"]      # optional list, default []
+      exclude = ["release/old"]                       # optional list, default []
+    }
+  }
 
   bypass_actors = [                                   # optional set, default []
     { actor_type = "RepositoryRole", role = "maintain", bypass_mode = "pull_request" },
@@ -154,7 +159,10 @@ resource "ghost_repository_ruleset" "example" {
     }
 
     required_status_checks = {                        # optional; present = rule on
-      contexts                             = ["ci/build", "ci/test"]  # required list, may be empty
+      required_check = [                              # required list, may be empty
+        { context = "ci/build" },                     # context required, non-empty
+        { context = "ci/test" },
+      ]
       strict_required_status_checks_policy = true
       do_not_enforce_on_create             = true
     }
@@ -171,6 +179,23 @@ id, as in `ghost_issue_label`).
   Ghost's own default**, so plans never show unknowns and the server never "fills in" something different.
 - `bypass_actors` is a **set**, so order doesn't matter.
 - `include` and `exclude` are **lists**, since Ghost keeps their order.
+- A null `conditions` and a `conditions.ref_name` with both lists empty both mean "no patterns" and must not
+  cause a diff, the same treatment `rules` gets below.
+
+### Parity with the GitHub provider
+
+The shape deliberately mirrors `integrations/github`'s `github_repository_ruleset`, so configs port with small
+edits: the same rule names and parameter names, `conditions.ref_name.include/exclude`, and
+`required_status_checks.required_check[].context`. It differs only where Ghost or this provider forces it:
+
+- **Nested attributes, not blocks** (`rules = { … }` rather than `rules { … }`). This is the Plugin Framework's
+  recommended style and matches the rest of this provider. Porting means adding `=` signs and turning repeated
+  blocks into lists.
+- **Bypass actors** use `role` / `team_id` instead of GitHub's numeric `actor_id`, because that's how Ghost
+  identifies them.
+- **`repository` is `owner/slug`**, as in every other resource here, not a bare name.
+- **`ruleset_id`** is Ghost's string id, not a number.
+- No `integration_id` on `required_check` (Ghost rejects it) and no `push` target (Ghost has none).
 
 ### Plan-time validation (beyond simple enum/length validators)
 
@@ -178,7 +203,7 @@ id, as in `ghost_issue_label`).
   allowed otherwise. `OrganizationAdmin` takes neither.
 - **No duplicate actors.** Identity is `actor_type` + `role`/`team_id`, ignoring `bypass_mode`, because that's
   how Ghost collapses them. The error names the duplicate.
-- `include`/`exclude` values are 1–255 characters and unique within each list. `allowed_merge_methods` values
+- `conditions.ref_name.include`/`exclude` values are 1–255 characters and unique within each list. `allowed_merge_methods` values
   are unique.
 - Unknown values during plan (e.g. a `team_id` from another resource) skip the checks that need them.
 
@@ -263,12 +288,12 @@ Ghost's 422 message is clear enough to surface as is.
 - Probe whether the native ruleset routes follow a renamed repository's old `owner/slug`. Either way, the
   resource always calls with the current `repository` value.
 - Probe Ghost's default `required_approving_review_count` and use it as the schema default.
-- Probe whether Ghost dedupes duplicate `contexts` or keeps them. If it dedupes, validate uniqueness; otherwise
+- Probe whether Ghost dedupes duplicate `required_check` contexts or keeps them. If it dedupes, validate uniqueness; otherwise
   allow duplicates.
 - Probe whether duplicate `include`/`exclude` patterns are kept. If they're deduped, the uniqueness validator
   above already covers it.
-- *(Design-author's call.)* Probe whether Ghost keeps the order of `required_status_checks` contexts. If it
-  reorders them, make `contexts` a set instead of a list.
+- *(Design-author's call.)* Probe whether Ghost keeps the order of `required_check` entries. If it reorders
+  them, make `required_check` a set instead of a list.
 - *(Design-author's call.)* Probe what happens to `pull_request`, `required_status_checks` and
   `required_linear_history` on a `target = "tag"` ruleset. If Ghost accepts and keeps them, do nothing. If it
   rejects them, surface the API error. If it **silently drops** them, reject that config at plan time
