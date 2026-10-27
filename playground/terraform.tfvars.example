@@ -14,6 +14,7 @@ ghost_token = "ghost_pat_..."
 # organization = "my-org"
 
 # Optional: the ID of a team in that organization, to add as a ruleset bypass
-# actor and to look up with the ghost_team data source. Find it in the
+# actor, to look up with the ghost_team data source and to give access to the
+# organization repositories with ghost_team_repository. Find it in the
 # organization_teams output after an apply with only organization set.
 # organization_team_id = "..."

@@ -45,7 +45,7 @@ variable "organization" {
 }
 
 variable "organization_team_id" {
-  description = "ID of a team in var.organization, to add as a ruleset bypass actor and look up with ghost_team. Leave null to skip both."
+  description = "ID of a team in var.organization, to add as a ruleset bypass actor, look up with ghost_team and give access with ghost_team_repository. Leave null to skip them."
   type        = string
   default     = null
 }
@@ -353,6 +353,47 @@ resource "ghost_repository_webhook" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_team_repository, in each team form. Created only when var.organization
+# and var.organization_team_id are set: only an organization's repositories
+# can be shared with its teams, and teams can't be created with a token. A team
+# has one role per repository, so the slug form uses a second repository.
+# ---------------------------------------------------------------------------
+
+resource "ghost_repository" "organization_team" {
+  count = length(data.ghost_team.by_id)
+
+  name  = "${var.name_prefix}-org-team"
+  owner = var.organization
+}
+
+# By team ID, which survives a rename of the team.
+resource "ghost_team_repository" "by_id" {
+  count = length(ghost_repository.organization_team)
+
+  repository = ghost_repository.organization[0].full_name
+  team_id    = data.ghost_team.by_id[0].id
+  role       = "write"
+
+  # Replacing the repository drops its team access; give it back.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.organization[0].repo_id]
+  }
+}
+
+# By team slug, matched case-insensitively.
+resource "ghost_team_repository" "by_slug" {
+  count = length(ghost_repository.organization_team)
+
+  repository = ghost_repository.organization_team[0].full_name
+  team_slug  = data.ghost_team.by_id[0].slug
+  role       = "maintain"
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.organization_team[0].repo_id]
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -362,6 +403,7 @@ output "repositories" {
     for key, repo in merge(
       { minimal = ghost_repository.minimal, full = ghost_repository.full, default_branch = ghost_repository.default_branch },
       { for r in ghost_repository.organization : "organization" => r },
+      { for r in ghost_repository.organization_team : "organization_team" => r },
     ) : key => { full_name = repo.full_name, visibility = repo.visibility, html_url = repo.html_url }
   }
 }
@@ -420,6 +462,16 @@ output "repository_webhook_secrets" {
   description = "The secrets Ghost signs deliveries with (X-Hub-Signature-256)."
   sensitive   = true
   value       = { minimal = ghost_repository_webhook.minimal.secret, full = ghost_repository_webhook.full.secret }
+}
+
+output "team_repositories" {
+  description = "The team access the playground manages, when var.organization_team_id is set."
+  value = {
+    for key, tr in merge(
+      { for r in ghost_team_repository.by_id : "by_id" => r },
+      { for r in ghost_team_repository.by_slug : "by_slug" => r },
+    ) : key => { id = tr.id, team_slug = tr.team_slug, role = tr.role }
+  }
 }
 
 output "data_sources_agree" {
