@@ -138,6 +138,17 @@ data "ghost_team" "by_slug" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_organization_teams (data source). Read only when var.organization is
+# set.
+# ---------------------------------------------------------------------------
+
+data "ghost_organization_teams" "all" {
+  count = var.organization == null ? 0 : 1
+
+  organization = var.organization
+}
+
+# ---------------------------------------------------------------------------
 # ghost_issue_label (resource)
 # ---------------------------------------------------------------------------
 
@@ -419,6 +430,23 @@ output "data_sources_agree" {
     data.ghost_repository.by_owner_and_name.repo_id == ghost_repository.full.repo_id,
     data.ghost_user.by_login.user_id == data.ghost_user.me.user_id,
     alltrue([for t in data.ghost_team.by_slug : t.id == data.ghost_team.by_id[0].id]),
+    alltrue([
+      for t in data.ghost_team.by_id : contains([for o in data.ghost_organization_teams.all[0].teams : o.id], t.id)
+    ]),
+  ])
+}
+
+output "organization_teams" {
+  description = "The teams in var.organization, keyed by slug, as listed by ghost_organization_teams."
+  value = one([
+    for o in data.ghost_organization_teams.all : {
+      for t in o.teams : t.slug => {
+        id               = t.id
+        name             = t.name
+        member_count     = t.member_count
+        repository_count = t.repository_count
+      }
+    }
   ])
 }
 
