@@ -104,3 +104,19 @@ func TestGetUserNotFound(t *testing.T) {
 		t.Fatalf("expected not found, got %v", err)
 	}
 }
+
+func TestErrorMessage(t *testing.T) {
+	tests := []struct{ body, want string }{
+		{`{"message":"Repository not found"}`, "Repository not found"},
+		{`{"message":["role must be one of the following values: read, admin","name should not be empty"]}`, "role must be one of the following values: read, admin; name should not be empty"},
+		{`{"message":[]}`, "400 Bad Request"},
+		{`{"message":""}`, "400 Bad Request"},
+		{`{"error":"Bad Request"}`, "400 Bad Request"},
+		{`not json`, "400 Bad Request"},
+	}
+	for _, tt := range tests {
+		if got := errorMessage([]byte(tt.body), "400 Bad Request"); got != tt.want {
+			t.Errorf("errorMessage(%s) = %q, want %q", tt.body, got, tt.want)
+		}
+	}
+}

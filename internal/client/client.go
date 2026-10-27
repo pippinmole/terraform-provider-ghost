@@ -244,13 +244,23 @@ func (c *Client) send(ctx context.Context, method, u string, body []byte) (*http
 }
 
 // errorMessage extracts the "message" field both API surfaces use for errors,
-// falling back to the HTTP status text.
+// falling back to the HTTP status text. Validation errors carry a list of
+// messages, which are joined with "; ".
 func errorMessage(body []byte, status string) string {
 	var payload struct {
-		Message string `json:"message"`
+		Message json.RawMessage `json:"message"`
 	}
-	if json.Unmarshal(body, &payload) == nil && payload.Message != "" {
-		return payload.Message
+	if json.Unmarshal(body, &payload) != nil {
+		return status
+	}
+
+	var msg string
+	if json.Unmarshal(payload.Message, &msg) == nil && msg != "" {
+		return msg
+	}
+	var msgs []string
+	if json.Unmarshal(payload.Message, &msgs) == nil && len(msgs) > 0 {
+		return strings.Join(msgs, "; ")
 	}
 
 	return status
