@@ -167,6 +167,18 @@ data "ghost_organization_teams" "all" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_organization (data source). Read only when var.organization is set.
+# Any organization's profile can be read, but only members see private
+# members and viewer_role.
+# ---------------------------------------------------------------------------
+
+data "ghost_organization" "this" {
+  count = var.organization == null ? 0 : 1
+
+  slug = var.organization
+}
+
+# ---------------------------------------------------------------------------
 # ghost_issue_label (resource)
 # ---------------------------------------------------------------------------
 
@@ -583,6 +595,7 @@ output "data_sources_agree" {
     alltrue([
       for t in data.ghost_team.by_id : contains([for o in data.ghost_organization_teams.all[0].teams : o.id], t.id)
     ]),
+    alltrue([for o in data.ghost_organization.this : o.id == lower(var.organization)]),
   ])
 }
 
@@ -596,6 +609,26 @@ output "organization_teams" {
         member_count     = t.member_count
         repository_count = t.repository_count
       }
+    }
+  ])
+}
+
+output "organization" {
+  description = "The profile of var.organization, as read by ghost_organization."
+  value = one([
+    for o in data.ghost_organization.this : {
+      id                      = o.id
+      name                    = o.name
+      logo                    = o.logo
+      created_at              = o.created_at
+      description             = o.description
+      website                 = o.website
+      location                = o.location
+      email                   = o.email
+      public_repository_count = o.public_repository_count
+      members                 = { for m in o.members : m.username => { name = m.name, image = m.image, public = m.public } }
+      pinned_repositories     = [for r in o.pinned_repositories : { full_name = r.full_name, name = r.name, description = r.description, visibility = r.visibility, slug = r.slug }]
+      viewer_role             = o.viewer_role
     }
   ])
 }
