@@ -87,17 +87,44 @@ func TestDeleteBranchEscapesName(t *testing.T) {
 
 func TestGetCommitStatus(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if got, want := r.URL.EscapedPath(), "/api/v3/repos/octo/r/commits/feat%2Fx/status"; got != want {
+		if got, want := r.URL.EscapedPath(), "/api/v3/repos/octo/r/commits/refs%2Fheads%2Ffeat%2Fx/status"; got != want {
 			t.Errorf("path = %q, want %q", got, want)
 		}
 		_, _ = w.Write([]byte(`{"state":"pending","sha":"abc123","total_count":0,"statuses":[]}`))
 	})
 
-	s, err := c.GetCommitStatus(context.Background(), "octo", "r", "feat/x")
+	s, err := c.GetCommitStatus(context.Background(), "octo", "r", "refs/heads/feat/x")
 	if err != nil {
 		t.Fatalf("GetCommitStatus: %v", err)
 	}
 	if s.SHA != "abc123" {
 		t.Errorf("sha = %q", s.SHA)
+	}
+}
+
+// TestBranchErrors pins the status codes the provider relies on: Ghost
+// returns 404 when there is nothing to branch from (including an empty
+// repository) and 409 when the branch already exists.
+func TestBranchErrors(t *testing.T) {
+	status := http.StatusNotFound
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"statusCode":404,"message":"Nothing to branch from at: nope"}`))
+	})
+	ctx := context.Background()
+
+	if _, err := c.CreateBranch(ctx, "octo", "r", CreateBranchRequest{Name: "x", From: "nope"}); !IsNotFound(err) {
+		t.Errorf("CreateBranch: expected not found, got %v", err)
+	}
+	if _, err := c.ListBranches(ctx, "octo", "r"); !IsNotFound(err) {
+		t.Errorf("ListBranches: expected not found, got %v", err)
+	}
+	if _, err := c.GetCommitStatus(ctx, "octo", "r", "nope"); !IsNotFound(err) {
+		t.Errorf("GetCommitStatus: expected not found, got %v", err)
+	}
+
+	status = http.StatusConflict
+	if _, err := c.CreateBranch(ctx, "octo", "r", CreateBranchRequest{Name: "x"}); !IsConflict(err) {
+		t.Errorf("CreateBranch: expected conflict, got %v", err)
 	}
 }

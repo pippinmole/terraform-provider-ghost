@@ -88,7 +88,7 @@ func (r *BranchResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				},
 			},
 			"source": schema.StringAttribute{
-				MarkdownDescription: "The branch, tag or commit SHA to start the branch at. Defaults to the repository's default branch. " + sourceReplaceDescription,
+				MarkdownDescription: "The branch, tag or commit SHA to start the branch at. Defaults to the repository's default branch. " + sourceReplaceDescription + " A source taken from another branch's `sha` changes whenever that branch moves, which replaces this branch; use the other branch's name to start from it once.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIf(createOnlyStringReplace,
 					sourceReplaceDescription, sourceReplaceDescription)},
@@ -233,7 +233,8 @@ func (r *BranchResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	status, err := r.client.GetCommitStatus(ctx, owner, repo, state.Branch.ValueString())
+	// The full ref, so a tag of the same name can't shadow the branch.
+	status, err := r.client.GetCommitStatus(ctx, owner, repo, "refs/heads/"+state.Branch.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading branch commit", err.Error())
 		return
@@ -338,10 +339,15 @@ func (v branchNameValidator) ValidateString(_ context.Context, req validator.Str
 		return
 	}
 
-	if name := req.ConfigValue.ValueString(); strings.HasPrefix(name, "refs/") {
+	name := req.ConfigValue.ValueString()
+	switch {
+	case strings.HasPrefix(name, "refs/heads/"):
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid branch name",
 			fmt.Sprintf("Give the branch name without the refs/heads/ prefix, e.g. %q instead of %q.",
 				strings.TrimPrefix(name, "refs/heads/"), name))
+	case strings.HasPrefix(name, "refs/"):
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid branch name",
+			fmt.Sprintf("%q is a full ref, not a branch name: the branch name must not start with \"refs/\".", name))
 	}
 }
 

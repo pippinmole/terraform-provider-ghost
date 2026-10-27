@@ -51,7 +51,7 @@ resource "ghost_branch" "release" {
 
 ### Optional
 
-- `source` (String) The branch, tag or commit SHA to start the branch at. Defaults to the repository's default branch. Changing this forces a new branch, unless it was previously unset (e.g. after import).
+- `source` (String) The branch, tag or commit SHA to start the branch at. Defaults to the repository's default branch. Changing this forces a new branch, unless it was previously unset (e.g. after import). A source taken from another branch's `sha` changes whenever that branch moves, which replaces this branch; use the other branch's name to start from it once.
 
 ### Read-Only
 
