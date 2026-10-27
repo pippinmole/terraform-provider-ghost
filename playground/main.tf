@@ -44,6 +44,12 @@ variable "organization" {
   default     = null
 }
 
+variable "organization_team_id" {
+  description = "ID of a team in var.organization, to add as a ruleset bypass actor. Leave null to skip it."
+  type        = string
+  default     = null
+}
+
 provider "ghost" {
   token    = var.ghost_token
   base_url = var.ghost_base_url
@@ -141,6 +147,100 @@ resource "ghost_issue_label" "punctuated" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_ruleset (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: an active ruleset with no conditions, rules or bypass
+# actors. target defaults to "branch".
+resource "ghost_repository_ruleset" "minimal" {
+  repository  = ghost_repository.full.full_name
+  name        = "minimal"
+  enforcement = "active"
+}
+
+# Every argument. Patterns are kept as written; Ghost stores "main" as
+# "refs/heads/main".
+resource "ghost_repository_ruleset" "full" {
+  repository  = ghost_repository.full.full_name
+  name        = "protect-main"
+  target      = "branch"
+  enforcement = "evaluate"
+
+  conditions = {
+    ref_name = {
+      include = ["~DEFAULT_BRANCH", "release/*"]
+      exclude = ["release/old"]
+    }
+  }
+
+  bypass_actors = [
+    { actor_type = "RepositoryRole", role = "maintain", bypass_mode = "pull_request" },
+    { actor_type = "RepositoryRole", role = "admin" },
+  ]
+
+  rules = {
+    creation                = true
+    update                  = true
+    deletion                = true
+    non_fast_forward        = true
+    required_linear_history = true
+    required_signatures     = true
+
+    pull_request = {
+      required_approving_review_count   = 1
+      dismiss_stale_reviews_on_push     = true
+      require_code_owner_review         = true
+      require_last_push_approval        = true
+      required_review_thread_resolution = true
+      allowed_merge_methods             = ["squash", "rebase"]
+    }
+
+    required_status_checks = {
+      required_check                       = [{ context = "ci/build" }, { context = "ci/test" }]
+      strict_required_status_checks_policy = true
+      do_not_enforce_on_create             = true
+    }
+  }
+
+  # Recreate the ruleset if the repository is replaced, not when it's renamed.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# A tag ruleset in the organization repository, with every bypass actor type.
+# The Team actor is added only when var.organization_team_id is set.
+resource "ghost_repository_ruleset" "organization" {
+  count = var.organization == null ? 0 : 1
+
+  repository  = ghost_repository.organization[0].full_name
+  name        = "protect-tags"
+  target      = "tag"
+  enforcement = "active"
+
+  conditions = {
+    ref_name = {
+      include = ["v*"]
+    }
+  }
+
+  bypass_actors = concat(
+    [
+      { actor_type = "OrganizationAdmin", role = null, team_id = null, bypass_mode = "always" },
+      { actor_type = "RepositoryRole", role = "admin", team_id = null, bypass_mode = "always" },
+    ],
+    var.organization_team_id == null ? [] : [
+      { actor_type = "Team", role = null, team_id = var.organization_team_id, bypass_mode = "pull_request" },
+    ],
+  )
+
+  rules = {
+    update   = true
+    deletion = true
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -162,6 +262,16 @@ output "issue_labels" {
       full       = ghost_issue_label.full
       punctuated = ghost_issue_label.punctuated
     } : key => { id = label.id, color = label.color, url = label.url }
+  }
+}
+
+output "repository_rulesets" {
+  description = "The repository rulesets the playground manages."
+  value = {
+    for key, rs in merge(
+      { minimal = ghost_repository_ruleset.minimal, full = ghost_repository_ruleset.full },
+      { for r in ghost_repository_ruleset.organization : "organization" => r },
+    ) : key => { id = rs.id, ruleset_id = rs.ruleset_id, enforcement = rs.enforcement }
   }
 }
 

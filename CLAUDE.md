@@ -33,7 +33,7 @@ chore/bump-plugin-framework
 ## Working in this repo
 
 - **Build and test:** `make build`, `go test ./...`. Run `go generate ./...` after any schema or description change, and commit the regenerated `docs/`. Never edit `docs/` by hand.
-- **Acceptance tests** run against live Ghost and create real repositories: `GHOST_TOKEN=… TF_ACC=1 go test ./internal/provider/ -run TestAcc -timeout 20m`. Name test repositories `tf-acc-*`, and always clean them up.
+- **Acceptance tests** run against live Ghost and create real repositories: `GHOST_TOKEN=… TF_ACC=1 go test ./internal/provider/ -run TestAcc -timeout 20m`. Set `GHOST_TEST_ORGANIZATION` to an organization with at least one team to also run the organization tests. Name test repositories `tf-acc-*`, and always clean them up.
 - **Auth:** a personal access token is sent as `Authorization: Bearer …`. Both `/api/v3` and the native `/api` accept it. Prefer v3, and fall back to native where v3 doesn't cover an operation. Never add cookie or session-based auth.
 - **Playground:** `playground/main.tf` is the everything-example, a single config that uses every resource and data source. Whenever you add a resource or data source, add it there in the same change, covering every argument and lookup form. Users copy `playground/terraform.tfvars.example` to `terraform.tfvars`.
 - **Secrets:** `*.tfvars` is gitignored and holds the real token. Never commit, print or log a token.

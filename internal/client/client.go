@@ -19,7 +19,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // DefaultBaseURL is the public Ghost API endpoint.
@@ -30,12 +33,21 @@ const (
 	nativePrefix = "/api"
 )
 
-// Client talks to the Ghost API.
+// Client talks to the Ghost API. It is safe for concurrent use, and waits out
+// Ghost's rate limit (see ratelimit.go) across all of its requests.
 type Client struct {
 	baseURL    *url.URL
 	token      string
 	userAgent  string
 	httpClient *http.Client
+	maxRetries int
+
+	// now and sleep are replaced in tests.
+	now   func() time.Time
+	sleep func(ctx context.Context, d time.Duration) error
+
+	mu       sync.Mutex
+	resumeAt time.Time // no request is sent before this
 }
 
 // Option configures a Client.
@@ -67,6 +79,9 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 		token:      token,
 		userAgent:  "terraform-provider-ghost",
 		httpClient: &http.Client{Timeout: 60 * time.Second},
+		maxRetries: defaultMaxRetries,
+		now:        time.Now,
+		sleep:      sleepContext,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -113,16 +128,25 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
+// IsConflict reports whether err is an APIError with a 409 status.
+func IsConflict(err error) bool {
+	var apiErr *APIError
+
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict
+}
+
 // Do sends a request to path (which must include its API prefix), JSON-encoding
-// body when non-nil and decoding the response into out when non-nil.
+// body when non-nil and decoding the response into out when non-nil. A
+// rate-limited request is retried once the limit resets, up to maxRetries
+// times.
 func (c *Client) Do(ctx context.Context, method, path string, body, out any) error {
-	var reqBody io.Reader
+	var reqBody []byte
 	if body != nil {
 		buf, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("encoding request body: %w", err)
 		}
-		reqBody = bytes.NewReader(buf)
+		reqBody = buf
 	}
 
 	ref, err := url.Parse(path)
@@ -132,9 +156,69 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	u := c.baseURL.JoinPath(ref.EscapedPath())
 	u.RawQuery = ref.RawQuery
 
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), reqBody)
+	for attempt := 0; ; attempt++ {
+		if err := c.waitForRateLimit(ctx); err != nil {
+			return fmt.Errorf("ghost API %s %s: waiting for rate limit: %w", method, ref.Path, err)
+		}
+
+		resp, respBody, err := c.send(ctx, method, u.String(), reqBody)
+		if err != nil {
+			return fmt.Errorf("ghost API %s %s: %w", method, ref.Path, err)
+		}
+		c.observeRateLimit(resp.Header)
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			wait := c.retryDelay(resp.Header, attempt)
+			if attempt < c.maxRetries && wait <= maxRateLimitWait {
+				tflog.Warn(ctx, "Ghost API rate limit reached, waiting before retrying", map[string]any{
+					"method": method,
+					"path":   ref.Path,
+					"wait":   wait.String(),
+					"retry":  attempt + 1,
+				})
+				c.pauseUntil(c.now().Add(wait))
+
+				continue
+			}
+
+			return &APIError{
+				StatusCode: resp.StatusCode,
+				Method:     method,
+				Path:       ref.Path,
+				Message:    fmt.Sprintf("%s (retry after %s)", errorMessage(respBody, resp.Status), wait),
+			}
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return &APIError{
+				StatusCode: resp.StatusCode,
+				Method:     method,
+				Path:       ref.Path,
+				Message:    errorMessage(respBody, resp.Status),
+			}
+		}
+
+		if out == nil || len(respBody) == 0 {
+			return nil
+		}
+		if err := json.Unmarshal(respBody, out); err != nil {
+			return fmt.Errorf("decoding response from %s %s: %w", method, ref.Path, err)
+		}
+
+		return nil
+	}
+}
+
+// send makes one HTTP request and reads the whole response body.
+func (c *Client) send(ctx context.Context, method, u string, body []byte) (*http.Response, []byte, error) {
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, u, reqBody)
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return nil, nil, fmt.Errorf("building request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
@@ -147,32 +231,16 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("ghost API %s %s: %w", method, ref.Path, err)
+		return nil, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
+		return nil, nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Method:     method,
-			Path:       ref.Path,
-			Message:    errorMessage(respBody, resp.Status),
-		}
-	}
-
-	if out == nil || len(respBody) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("decoding response from %s %s: %w", method, ref.Path, err)
-	}
-
-	return nil
+	return resp, respBody, nil
 }
 
 // errorMessage extracts the "message" field both API surfaces use for errors,

@@ -30,10 +30,11 @@ var (
 )
 
 var (
-	// labelNamePattern rejects leading and trailing whitespace, which Ghost
-	// trims silently, so the label it stores would not match the config. The
-	// class is the set JavaScript's String.prototype.trim removes.
-	labelNamePattern = regexp.MustCompile(`(?s)^[^\s\p{Z}\x{0B}\x{FEFF}](.*[^\s\p{Z}\x{0B}\x{FEFF}])?$`)
+	// untrimmedPattern rejects leading and trailing whitespace, which Ghost
+	// trims silently from label and ruleset names, so what it stores would not
+	// match the config. The class is the set JavaScript's
+	// String.prototype.trim removes.
+	untrimmedPattern = regexp.MustCompile(`(?s)^[^\s\p{Z}\x{0B}\x{FEFF}](.*[^\s\p{Z}\x{0B}\x{FEFF}])?$`)
 	// labelColorPattern matches the six hex digits Ghost accepts, with an
 	// optional leading "#" that Ghost strips.
 	labelColorPattern = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
@@ -95,7 +96,7 @@ func (r *IssueLabelResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Validators: []validator.String{
 					stringvalidator.UTF8LengthBetween(1, 50),
 					stringvalidator.NoneOf(".", ".."),
-					stringvalidator.RegexMatches(labelNamePattern, "must not start or end with whitespace"),
+					stringvalidator.RegexMatches(untrimmedPattern, "must not start or end with whitespace"),
 				},
 			},
 			"color": schema.StringAttribute{
@@ -164,7 +165,7 @@ func (r *IssueLabelResource) ModifyPlan(ctx context.Context, req resource.Modify
 	if !plan.Repository.Equal(state.Repository) && !plan.Repository.IsUnknown() {
 		// A known new value can be checked now. An unknown one is usually a
 		// ghost_repository being renamed, and Update checks it once known.
-		repo, err := r.getRepository(ctx, plan.Repository.ValueString())
+		repo, err := lookupRepository(ctx, r.client, plan.Repository.ValueString())
 		if client.IsNotFound(err) || (err == nil && !sameRepository(state.RepositoryID, repo)) {
 			resp.RequiresReplace.Append(path.Root("repository"))
 			return
@@ -343,18 +344,18 @@ func (r *IssueLabelResource) ImportState(ctx context.Context, req resource.Impor
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
 }
 
-// getRepository looks up the repository with the given "owner/slug" name.
-func (r *IssueLabelResource) getRepository(ctx context.Context, fullName string) (*client.Repository, error) {
+// lookupRepository looks up the repository with the given "owner/slug" name.
+func lookupRepository(ctx context.Context, c *client.Client, fullName string) (*client.Repository, error) {
 	owner, repo, err := client.SplitFullName(fullName)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.client.GetRepository(ctx, owner, repo)
+	return c.GetRepository(ctx, owner, repo)
 }
 
-// sameRepository reports whether repo is the repository a label was created
-// in, given the repository_id in state. A missing ID can't rule it out.
+// sameRepository reports whether repo is the repository a label or ruleset
+// was created in, given the repository_id in state. A missing ID can't rule it out.
 func sameRepository(stateRepoID types.Int64, repo *client.Repository) bool {
 	return stateRepoID.IsNull() || stateRepoID.IsUnknown() || stateRepoID.ValueInt64() == repo.ID
 }
