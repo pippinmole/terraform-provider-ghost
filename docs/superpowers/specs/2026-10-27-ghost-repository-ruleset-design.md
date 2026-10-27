@@ -267,5 +267,15 @@ Ghost's 422 message is clear enough to surface as is.
   allow duplicates.
 - Probe whether duplicate `include`/`exclude` patterns are kept. If they're deduped, the uniqueness validator
   above already covers it.
+- *(Design-author's call.)* Probe whether Ghost keeps the order of `required_status_checks` contexts. If it
+  reorders them, make `contexts` a set instead of a list.
+- *(Design-author's call.)* Probe what happens to `pull_request`, `required_status_checks` and
+  `required_linear_history` on a `target = "tag"` ruleset. If Ghost accepts and keeps them, do nothing. If it
+  rejects them, surface the API error. If it **silently drops** them, reject that config at plan time
+  (target-dependent validator, with unit and acceptance coverage), per the anti-goal above.
+- *(Design-author's call.)* Build on the rate-limit retries from PR #4 (`feat/client-rate-limiting`). The
+  acceptance tests share the 120/min budget. Rebase this branch onto `main` once #4 merges. If it hasn't
+  merged by the time acceptance tests run, rebase onto `feat/client-rate-limiting` and open the PR against
+  `main` noting the dependency.
 - Exact Go type layout, file split, and helper names, following the style of `issue_label_resource.go`.
 - Wording of attribute descriptions (plain language, mention Ghost's quirks where they affect the user).
