@@ -291,6 +291,35 @@ resource "ghost_branch_default" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_webhook (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: active, with a secret Ghost generates. Ghost pings the URL
+# as soon as the webhook is created. Ghost's own web host answers 200, so the
+# ping shows as delivered.
+resource "ghost_repository_webhook" "minimal" {
+  repository = ghost_repository.minimal.full_name
+  url        = "https://web.ghost.procrastinator.fyi/"
+  events     = ["push"]
+}
+
+# Every argument. Change secret_rotation to replace the secret in place, e.g.
+# with time_rotating. replace_triggered_by recreates the webhook when the
+# repository is replaced, which deletes its webhooks. Import it with
+# "<owner>/<slug>:<webhook_id>"; the secret is null after import.
+resource "ghost_repository_webhook" "full" {
+  repository      = ghost_repository.full.full_name
+  url             = "https://example.com/ghost-webhook"
+  events          = ["issue.opened", "issue.closed", "label.created", "release.published"]
+  active          = false
+  secret_rotation = "2026-10"
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -342,6 +371,22 @@ output "default_branch" {
     branch          = ghost_branch_default.full.branch
     previous_branch = ghost_branch_default.full.previous_branch
   }
+}
+
+output "repository_webhooks" {
+  description = "The repository webhooks the playground manages. The secrets are sensitive: read them with terraform output -json."
+  value = {
+    for key, hook in {
+      minimal = ghost_repository_webhook.minimal
+      full    = ghost_repository_webhook.full
+    } : key => { id = hook.id, active = hook.active, disabled_reason = hook.disabled_reason }
+  }
+}
+
+output "repository_webhook_secrets" {
+  description = "The secrets Ghost signs deliveries with (X-Hub-Signature-256)."
+  sensitive   = true
+  value       = { minimal = ghost_repository_webhook.minimal.secret, full = ghost_repository_webhook.full.secret }
 }
 
 output "data_sources_agree" {
