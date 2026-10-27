@@ -116,6 +116,7 @@ func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource 
 		NewBranchDefaultResource,
 		NewRepositoryWebhookResource,
 		NewTeamRepositoryResource,
+		NewRepositoryCollaboratorResource,
 	}
 }
 
