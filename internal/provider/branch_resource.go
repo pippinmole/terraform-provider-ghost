@@ -302,7 +302,9 @@ func (r *BranchResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if client.IsConflict(err) {
 		resp.Diagnostics.AddError("Error deleting branch",
 			fmt.Sprintf("Ghost won't delete branch %q while it is the repository's default branch or an open pull "+
-				"request compares it. Change the default branch or close the pull request first. (%s)", state.Branch.ValueString(), err))
+				"request compares it. Change the default branch or close the pull request first. If a ghost_branch_default "+
+				"points at this branch, move it to another branch in a separate apply before removing this one: "+
+				"Terraform deletes the branch before it updates the default branch. (%s)", state.Branch.ValueString(), err))
 		return
 	}
 	if err != nil && !client.IsNotFound(err) {
