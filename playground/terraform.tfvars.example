@@ -18,3 +18,8 @@ ghost_token = "ghost_pat_..."
 # organization repositories with ghost_team_repository. Find it in the
 # organization_teams output after an apply with only organization set.
 # organization_team_id = "..."
+
+# Optional: the username of another Ghost user to invite to the repositories
+# with ghost_repository_collaborator. The invitation stays pending unless they
+# accept it, and destroy withdraws it.
+# collaborator = "octocat"

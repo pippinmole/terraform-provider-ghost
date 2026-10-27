@@ -50,6 +50,12 @@ variable "organization_team_id" {
   default     = null
 }
 
+variable "collaborator" {
+  description = "Username of another Ghost user to invite to repositories with ghost_repository_collaborator. They get an email invitation, which they can ignore: it stays pending, and destroy withdraws it. Leave null to skip the collaborator examples."
+  type        = string
+  default     = null
+}
+
 provider "ghost" {
   token    = var.ghost_token
   base_url = var.ghost_base_url
@@ -394,6 +400,40 @@ resource "ghost_team_repository" "by_slug" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_collaborator. Created only when var.collaborator is set.
+# The invitation stays pending until that user accepts it; destroy withdraws
+# it (or removes the collaborator after they accept). Import with
+# "<owner>/<slug>:<username>".
+# ---------------------------------------------------------------------------
+
+resource "ghost_repository_collaborator" "full" {
+  count = var.collaborator == null ? 0 : 1
+
+  repository = ghost_repository.full.full_name
+  username   = var.collaborator
+  role       = "triage"
+
+  # Replacing the repository drops its collaborators; invite them again.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# On the organization repository too: a user outside the organization becomes
+# an outside collaborator once they accept.
+resource "ghost_repository_collaborator" "organization" {
+  count = var.collaborator == null ? 0 : length(ghost_repository.organization)
+
+  repository = ghost_repository.organization[0].full_name
+  username   = var.collaborator
+  role       = "read"
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.organization[0].repo_id]
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -471,6 +511,16 @@ output "team_repositories" {
       { for r in ghost_team_repository.by_id : "by_id" => r },
       { for r in ghost_team_repository.by_slug : "by_slug" => r },
     ) : key => { id = tr.id, team_slug = tr.team_slug, role = tr.role }
+  }
+}
+
+output "repository_collaborators" {
+  description = "The collaborators the playground invites, when var.collaborator is set."
+  value = {
+    for key, c in merge(
+      { for r in ghost_repository_collaborator.full : "full" => r },
+      { for r in ghost_repository_collaborator.organization : "organization" => r },
+    ) : key => { id = c.id, role = c.role, status = c.status, expires_at = c.expires_at }
   }
 }
 
