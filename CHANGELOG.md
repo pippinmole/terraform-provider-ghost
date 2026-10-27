@@ -9,6 +9,7 @@ FEATURES:
 * **New Resource:** `ghost_branch`
 * **New Resource:** `ghost_branch_default`
 * **New Resource:** `ghost_repository_webhook`
+* **New Resource:** `ghost_team_repository`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`
