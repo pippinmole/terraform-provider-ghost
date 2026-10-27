@@ -32,7 +32,8 @@ provider "ghost" {
 ```sh
 make install   # builds and installs the binary into $(go env GOPATH)/bin
 make test      # unit tests
-make testacc   # acceptance tests against live Ghost (needs GHOST_TOKEN, creates real resources)
+make testacc   # acceptance tests against live Ghost (needs GHOST_TOKEN, creates real resources;
+               # set GHOST_TEST_ORGANIZATION to an org with a team to also test org rulesets)
 make generate  # regenerates docs/ with tfplugindocs
 make lint      # golangci-lint
 make hooks     # runs golangci-lint as a git pre-commit hook
