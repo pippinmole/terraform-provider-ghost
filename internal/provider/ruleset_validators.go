@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/pippinmole/terraform-provider-ghost/internal/client"
 )
@@ -33,14 +34,17 @@ func (v bypassActorsSetValidator) ValidateSet(ctx context.Context, req validator
 		return
 	}
 
-	var actors []rulesetBypassActorModel
-	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &actors, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	seen := map[string]bool{}
-	for _, a := range actors {
+	for _, elem := range req.ConfigValue.Elements() {
+		obj, ok := elem.(types.Object)
+		if !ok || obj.IsUnknown() || obj.IsNull() {
+			continue
+		}
+		var a rulesetBypassActorModel
+		resp.Diagnostics.Append(obj.As(ctx, &a, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 		if a.ActorType.IsUnknown() || a.ActorType.IsNull() {
 			continue
 		}

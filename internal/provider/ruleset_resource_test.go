@@ -34,6 +34,7 @@ func TestRulesetConfigValidation(t *testing.T) {
 	}{
 		{"empty name", `name = ""`, `(?i)length`},
 		{"long name", `name = "` + strings.Repeat("x", 101) + `"`, `(?i)length`},
+		{"padded name", `name = " protect"`, `whitespace`},
 		{"bad target", `target = "push"`, `value must be one of`},
 		{"bad enforcement", `enforcement = "on"`, `value must be one of`},
 		{"long pattern", `conditions = { ref_name = { include = ["` + strings.Repeat("x", 256) + `"] } }`, `(?i)length`},
@@ -104,6 +105,14 @@ func TestBypassActorsValidatorUnknownTeamID(t *testing.T) {
 	)
 	if resp.Diagnostics.HasError() {
 		t.Errorf("unknown team_id should skip validation: %v", resp.Diagnostics)
+	}
+
+	resp = validateBypassActors(
+		types.ObjectUnknown(bypassActorAttrTypes),
+		bypassActorValue(types.StringValue("Team"), types.StringNull(), types.StringValue("T1")),
+	)
+	if resp.Diagnostics.HasError() {
+		t.Errorf("a wholly unknown actor should skip validation: %v", resp.Diagnostics)
 	}
 
 	resp = validateBypassActors(
@@ -482,24 +491,37 @@ removed {
 
 func TestAccRepositoryRuleset_duplicateName(t *testing.T) {
 	repoName := acctest.RandomWithPrefix("tf-acc")
+	config := func(otherName string) string {
+		return testAccRulesetConfig(repoName, `
+  name        = "protect"
+  enforcement = "active"
+}
+
+resource "ghost_repository_ruleset" "other" {
+  repository  = ghost_repository_ruleset.test.repository
+  name        = "`+otherName+`"
+  enforcement = "active"
+  depends_on  = [ghost_repository_ruleset.test]`)
+	}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRulesetDestroy,
-		Steps: []resource.TestStep{{
-			Config: testAccRulesetConfig(repoName, `
-  name        = "protect"
-  enforcement = "active"
-}
-
-resource "ghost_repository_ruleset" "dup" {
-  repository  = ghost_repository_ruleset.test.repository
-  name        = "protect"
-  enforcement = "active"
-  depends_on  = [ghost_repository_ruleset.test]`),
-			ExpectError: regexp.MustCompile(`(?s)already exists.*terraform import`),
-		}},
+		Steps: []resource.TestStep{
+			{
+				// Creating a second ruleset with a taken name suggests importing it.
+				Config:      config("protect"),
+				ExpectError: regexp.MustCompile(`(?s)already exists.*terraform import`),
+			},
+			{Config: config("other")},
+			{
+				// Renaming a managed ruleset onto a taken name can't be fixed by
+				// importing, so the error says to choose another name instead.
+				Config:      config("protect"),
+				ExpectError: regexp.MustCompile(`(?s)another ruleset.*already\s+uses\s+the\s+name\s+"protect".*choose\s+a\s+different\s+name`),
+			},
+		},
 	})
 }
 

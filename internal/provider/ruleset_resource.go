@@ -218,7 +218,10 @@ func (r *RepositoryRulesetResource) Schema(_ context.Context, _ resource.SchemaR
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The ruleset name, 1 to 100 characters, unique within the repository.",
 				Required:            true,
-				Validators:          []validator.String{stringvalidator.UTF8LengthBetween(1, 100)},
+				Validators: []validator.String{
+					stringvalidator.UTF8LengthBetween(1, 100),
+					stringvalidator.RegexMatches(untrimmedPattern, "must not start or end with whitespace"),
+				},
 			},
 			"target": schema.StringAttribute{
 				MarkdownDescription: "What the ruleset protects: `branch` or `tag`. Defaults to `branch`. Changing it updates the ruleset in place.",
@@ -431,7 +434,7 @@ func (r *RepositoryRulesetResource) Create(ctx context.Context, req resource.Cre
 
 	rs, err := r.client.CreateRuleset(ctx, owner, repo, body)
 	if client.IsConflict(err) {
-		resp.Diagnostics.AddError("Error creating ruleset", r.conflictMessage(ctx, plan.Repository.ValueString(), body.Name, err))
+		resp.Diagnostics.AddError("Error creating ruleset", r.conflictMessage(ctx, plan.Repository.ValueString(), body.Name, "", err))
 		return
 	}
 	if err != nil {
@@ -517,7 +520,7 @@ func (r *RepositoryRulesetResource) Update(ctx context.Context, req resource.Upd
 
 	rs, err := r.client.ReplaceRuleset(ctx, owner, repo, state.RulesetID.ValueString(), body)
 	if client.IsConflict(err) {
-		resp.Diagnostics.AddError("Error updating ruleset", r.conflictMessage(ctx, plan.Repository.ValueString(), body.Name, err))
+		resp.Diagnostics.AddError("Error updating ruleset", r.conflictMessage(ctx, plan.Repository.ValueString(), body.Name, state.RulesetID.ValueString(), err))
 		return
 	}
 	if err != nil {
@@ -560,17 +563,33 @@ func (r *RepositoryRulesetResource) ImportState(ctx context.Context, req resourc
 }
 
 // conflictMessage explains a 409 from Ghost: another ruleset already has the
-// name. It looks up that ruleset so the message can give the import command.
-func (r *RepositoryRulesetResource) conflictMessage(ctx context.Context, repository, name string, cause error) string {
+// name. self is the ID of the ruleset being updated, or "" on create. On
+// create the message gives the import command for the existing ruleset; on
+// update importing can't help, so it asks for another name.
+func (r *RepositoryRulesetResource) conflictMessage(ctx context.Context, repository, name, self string, cause error) string {
+	var existing string
 	if owner, repo, err := client.SplitFullName(repository); err == nil {
 		if list, err := r.client.ListRulesets(ctx, owner, repo); err == nil {
 			for _, rs := range list {
-				if rs.Name == name {
-					return fmt.Sprintf("a ruleset named %q already exists on %s; import it with: terraform import <address> %s",
-						name, repository, rulesetID(repository, rs.ID))
+				if rs.Name == name && rs.ID != self {
+					existing = rs.ID
+					break
 				}
 			}
 		}
+	}
+
+	if self != "" {
+		if existing != "" {
+			return fmt.Sprintf("another ruleset (%s) on %s already uses the name %q; choose a different name, or remove that ruleset first",
+				existing, repository, name)
+		}
+		return fmt.Sprintf("another ruleset on %s already uses the name %q; choose a different name, or remove that ruleset first (%s)",
+			repository, name, cause)
+	}
+	if existing != "" {
+		return fmt.Sprintf("a ruleset named %q already exists on %s; import it with: terraform import <address> %s",
+			name, repository, rulesetID(repository, existing))
 	}
 
 	return fmt.Sprintf("a ruleset named %q already exists on %s; find its ID with GET /api/repositories/%s/rulesets "+

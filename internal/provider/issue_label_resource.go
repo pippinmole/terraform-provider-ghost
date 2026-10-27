@@ -30,10 +30,11 @@ var (
 )
 
 var (
-	// labelNamePattern rejects leading and trailing whitespace, which Ghost
-	// trims silently, so the label it stores would not match the config. The
-	// class is the set JavaScript's String.prototype.trim removes.
-	labelNamePattern = regexp.MustCompile(`(?s)^[^\s\p{Z}\x{0B}\x{FEFF}](.*[^\s\p{Z}\x{0B}\x{FEFF}])?$`)
+	// untrimmedPattern rejects leading and trailing whitespace, which Ghost
+	// trims silently from label and ruleset names, so what it stores would not
+	// match the config. The class is the set JavaScript's
+	// String.prototype.trim removes.
+	untrimmedPattern = regexp.MustCompile(`(?s)^[^\s\p{Z}\x{0B}\x{FEFF}](.*[^\s\p{Z}\x{0B}\x{FEFF}])?$`)
 	// labelColorPattern matches the six hex digits Ghost accepts, with an
 	// optional leading "#" that Ghost strips.
 	labelColorPattern = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
@@ -95,7 +96,7 @@ func (r *IssueLabelResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Validators: []validator.String{
 					stringvalidator.UTF8LengthBetween(1, 50),
 					stringvalidator.NoneOf(".", ".."),
-					stringvalidator.RegexMatches(labelNamePattern, "must not start or end with whitespace"),
+					stringvalidator.RegexMatches(untrimmedPattern, "must not start or end with whitespace"),
 				},
 			},
 			"color": schema.StringAttribute{
