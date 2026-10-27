@@ -131,3 +131,32 @@ func (c *Client) SetRepositoryTeamRole(ctx context.Context, owner, repo, teamID,
 func (c *Client) RemoveRepositoryTeam(ctx context.Context, owner, repo, teamID string) error {
 	return c.Do(ctx, http.MethodDelete, NativePath("repositories", owner, repo, "teams", teamID), nil, nil)
 }
+
+// AddTeamMember adds the user to the team with the given slug, or does
+// nothing when they're already in it. Ghost only adds members of the
+// organization: anyone else gets 400 "<user> is not a member here". It takes
+// the team's slug, not its ID, and keeps a maintainer a maintainer.
+func (c *Client) AddTeamMember(ctx context.Context, org, teamSlug, username string) error {
+	return c.Do(ctx, http.MethodPut, NativePath("organizations", org, "teams", teamSlug, "members", username), nil, nil)
+}
+
+// RemoveTeamMember removes the user from the team with the given slug, which
+// also ends their role as a maintainer. Ghost returns 204 when they weren't
+// in the team, and 404 when the user or team doesn't exist.
+func (c *Client) RemoveTeamMember(ctx context.Context, org, teamSlug, username string) error {
+	return c.Do(ctx, http.MethodDelete, NativePath("organizations", org, "teams", teamSlug, "members", username), nil, nil)
+}
+
+// AppointTeamMaintainer makes a member of the team with the given slug one
+// of its maintainers. Ghost returns 400 "<user> is not a member here" for
+// someone who isn't in the team.
+func (c *Client) AppointTeamMaintainer(ctx context.Context, org, teamSlug, username string) error {
+	return c.Do(ctx, http.MethodPut, NativePath("organizations", org, "teams", teamSlug, "maintainers", username), nil, nil)
+}
+
+// DismissTeamMaintainer makes a maintainer of the team with the given slug
+// an ordinary member again. Only organization admins may, and Ghost returns
+// 204 when the user wasn't a maintainer.
+func (c *Client) DismissTeamMaintainer(ctx context.Context, org, teamSlug, username string) error {
+	return c.Do(ctx, http.MethodDelete, NativePath("organizations", org, "teams", teamSlug, "maintainers", username), nil, nil)
+}

@@ -166,3 +166,69 @@ func TestRemoveRepositoryTeam(t *testing.T) {
 		t.Errorf("second RemoveRepositoryTeam error = %v, want a 404", err)
 	}
 }
+
+func TestTeamMemberMethods(t *testing.T) {
+	type call func(c *Client) error
+	tests := []struct {
+		name   string
+		call   call
+		method string
+		path   string
+	}{
+		{"AddTeamMember", func(c *Client) error {
+			return c.AddTeamMember(context.Background(), "my org", "core/team", "Al ice")
+		}, http.MethodPut, "/api/organizations/my%20org/teams/core%2Fteam/members/Al%20ice"},
+		{"RemoveTeamMember", func(c *Client) error {
+			return c.RemoveTeamMember(context.Background(), "acme", "core", "alice")
+		}, http.MethodDelete, "/api/organizations/acme/teams/core/members/alice"},
+		{"AppointTeamMaintainer", func(c *Client) error {
+			return c.AppointTeamMaintainer(context.Background(), "acme", "core", "alice")
+		}, http.MethodPut, "/api/organizations/acme/teams/core/maintainers/alice"},
+		{"DismissTeamMaintainer", func(c *Client) error {
+			return c.DismissTeamMaintainer(context.Background(), "acme", "core", "alice")
+		}, http.MethodDelete, "/api/organizations/acme/teams/core/maintainers/alice"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tt.method || r.URL.EscapedPath() != tt.path {
+					t.Errorf("got %s %s, want %s %s", r.Method, r.URL.EscapedPath(), tt.method, tt.path)
+				}
+				if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+					t.Errorf("Authorization = %q", got)
+				}
+				if body, _ := io.ReadAll(r.Body); len(body) != 0 {
+					t.Errorf("body = %s, want none", body)
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			if err := tt.call(c); err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestAddTeamMemberErrors(t *testing.T) {
+	tests := []struct {
+		status int
+		msg    string
+	}{
+		{http.StatusBadRequest, "pippinextra is not a member here"},
+		{http.StatusNotFound, "User nobody not found"},
+		{http.StatusNotFound, "Team not found"},
+		{http.StatusForbidden, "Admins and the team maintainers only"},
+	}
+	for _, tt := range tests {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tt.status)
+			_, _ = w.Write([]byte(`{"statusCode":0,"error":"Error","message":"` + tt.msg + `"}`))
+		})
+
+		err := c.AddTeamMember(context.Background(), "acme", "core", "x")
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != tt.status || apiErr.Message != tt.msg {
+			t.Errorf("AddTeamMember error = %v, want %d %q", err, tt.status, tt.msg)
+		}
+	}
+}
