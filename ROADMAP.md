@@ -48,36 +48,36 @@ Core value: the repository and what people configure on it straight away.
 | 3 | ✅ | `ghost_user` | data source | v3 | `GET /user` (current) or `/users/{login}`. Logins are matched case-sensitively |
 | 4 | ✅ | `ghost_issue_label` | resource | v3 | Full CRUD on `/repos/{o}/{r}/labels[/{name}]`. Renames go through `new_name` in place. `color` accepts a leading `#` and any case (Ghost stores lower case without `#`; the configured spelling is kept), default `ededed`. Names are ≤ 50 chars, URL-encoded and case-sensitive; Ghost trims surrounding whitespace, so it is rejected, as are `.` and `..`. Import `owner/repo:name` (split at the first `:`) |
 | 5 | ✅ | `ghost_repository_ruleset` | resource | native | Ghost's only branch protection, shaped like the GitHub provider's. Native API (`/api/repositories/{o}/{r}/rulesets`), whose `PUT` is a full replace. Patterns are stored as `refs/heads/…` / `refs/tags/…` (`~DEFAULT_BRANCH`, `~ALL` allowed); the configured spelling is kept. Bypass actors: repository role, organization admin, or team by its string team id. Import `owner/repo:ruleset_id` |
-| 6 | ❌ | `ghost_release` | resource | v3 | CRUD on `/repos/{o}/{r}/releases[/{id}]`. `tag_name` is RequiresReplace (PATCH changes return 422). Don't model `make_latest`, `generate_release_notes`, `discussion_category_name`. Delete keeps the tag. Import `owner/repo:id` |
-| 7 | ❌ | `ghost_branch` | resource | mixed | Create: native `POST /branches {name, from}`. Read: native `GET /branches` (list only, no SHA; check whether v3 `GET /git/refs/heads/{b}` gives a SHA). Delete: v3 `DELETE /git/refs/heads/{b}`. The source must exist, so no branches on empty repos. Import `owner/repo:branch` |
-| 8 | ❌ | `ghost_branch_default` | resource | native | Native `PATCH /api/repositories/{u}/{slug} {defaultBranch}`; the branch must exist. Read from native `GET /branches`, because v3 `default_branch` says `main` even on empty repos. Delete just removes it from state. Import `owner/repo` |
-| 9 | ❌ | `ghost_repository_webhook` | resource | native | `GET`/`POST …/webhooks`, then `PATCH`/`DELETE /{id}`; no single GET, so Read filters the list. Secret is server-generated and returned once (Computed + Sensitive, empty after import; `POST /{id}/secret` rotates it). No `content_type`/`insecure_ssl`. Validate `events` against Ghost's 37 event names. Ghost auto-disables failing hooks (`disabledReason`). Push events aren't delivered yet. Import `owner/repo:id` |
+| 6 | 🚧 | `ghost_branch` | resource | mixed | Create: native `POST /branches {name, from}`. Read: native `GET /branches` (list only, no SHA; check whether v3 `GET /git/refs/heads/{b}` gives a SHA). Delete: v3 `DELETE /git/refs/heads/{b}`. The source must exist, so no branches on empty repos. Import `owner/repo:branch` |
+| 7 | ❌ | `ghost_branch_default` | resource | native | Native `PATCH /api/repositories/{u}/{slug} {defaultBranch}`; the branch must exist. Read from native `GET /branches`, because v3 `default_branch` says `main` even on empty repos. Delete just removes it from state. Import `owner/repo` |
+| 8 | ❌ | `ghost_repository_webhook` | resource | native | `GET`/`POST …/webhooks`, then `PATCH`/`DELETE /{id}`; no single GET, so Read filters the list. Secret is server-generated and returned once (Computed + Sensitive, empty after import; `POST /{id}/secret` rotates it). No `content_type`/`insecure_ssl`. Validate `events` against Ghost's 37 event names. Ghost auto-disables failing hooks (`disabledReason`). Push events aren't delivered yet. Import `owner/repo:id` |
 
 ## Tier 2: access control and org management
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 10 | ❌ | `ghost_repository_collaborator` | resource | native | `PUT …/collaborators/{user} {role}` invites the user or changes their role (idempotent); `DELETE` removes them or withdraws the invite. Read from the list (`status`: accepted/pending/expired). Invites expire after 7 days. Import `owner/repo:username` |
-| 11 | ❌ | `ghost_team` | data source | native | `GET /api/organizations/{slug}/teams/{team}` returns `id`, `members[].maintainer`, `repositories[]`. Lookup is by slug, which changes on rename |
-| 12 | ❌ | `ghost_organization_teams` | data source | native | `GET /api/organizations/{slug}/teams`, members only |
-| 13 | ❌ | `ghost_team_repository` | resource | native | `PUT`/`DELETE /api/repositories/{u}/{r}/teams/{teamId} {role}`; read from `GET …/teams`. Org-owned repos only. Uses the string team id. Import `owner/repo:teamId` |
-| 14 | ❌ | `ghost_team_membership` | resource | native | `PUT`/`DELETE …/teams/{team}/members/{user}` and `…/maintainers/{user}`; `role` = `member`/`maintainer`. The user must already be in the org. Store the team id to survive renames. Import `org:team:username` |
-| 15 | ❌ | `ghost_organization` | data source | native | `GET /api/organizations/{slug}` (public): profile, `members[]` (no roles), `pinned[]` |
-| 16 | ❌ | `ghost_organization_settings` | resource | native | Singleton. `GET`/`PATCH /api/organizations/{slug}/settings`: `basePermission`, `membersCanCreatePublic/PrivateRepositories`, `allowPrivateForks`, `oauthAppRestrictions`, `defaultBranch`, `description`, `website`, `location`, `email`. Delete resets to defaults or drops from state (decide and document). Display name is Better Auth only. Import by org slug |
-| 17 | ❌ | `ghost_organization_webhook` | resource | native | Same shape and gotchas as #9, on `/api/organizations/{slug}/webhooks`. Import `org:id` |
-| 18 | ❌ | `ghost_user_ssh_key` | resource | native | v3 `/user/keys` returns `id: null` and has no delete, so use native `/api/ssh-keys` throughout (`publicKey`, `title`; returns `fingerprint`). Compare keys without the comment. Everything is ForceNew. Import `id` |
-| 19 | ❌ | `ghost_user_ssh_signing_key` | resource | v3 | `POST`/`GET /user/ssh_signing_keys`, `GET`/`DELETE /{id}`. Everything is ForceNew. Import `id` |
-| 20 | ❌ | `ghost_user_gpg_key` | resource | native | `GET`/`POST /api/gpg-keys {publicKey}`, `DELETE /{id}`. Everything is ForceNew. Import `id` |
+| 9 | ❌ | `ghost_repository_collaborator` | resource | native | `PUT …/collaborators/{user} {role}` invites the user or changes their role (idempotent); `DELETE` removes them or withdraws the invite. Read from the list (`status`: accepted/pending/expired). Invites expire after 7 days. Import `owner/repo:username` |
+| 10 | ❌ | `ghost_team` | data source | native | `GET /api/organizations/{slug}/teams/{team}` returns `id`, `members[].maintainer`, `repositories[]`. Lookup is by slug, which changes on rename |
+| 11 | ❌ | `ghost_organization_teams` | data source | native | `GET /api/organizations/{slug}/teams`, members only |
+| 12 | ❌ | `ghost_team_repository` | resource | native | `PUT`/`DELETE /api/repositories/{u}/{r}/teams/{teamId} {role}`; read from `GET …/teams`. Org-owned repos only. Uses the string team id. Import `owner/repo:teamId` |
+| 13 | ❌ | `ghost_team_membership` | resource | native | `PUT`/`DELETE …/teams/{team}/members/{user}` and `…/maintainers/{user}`; `role` = `member`/`maintainer`. The user must already be in the org. Store the team id to survive renames. Import `org:team:username` |
+| 14 | ❌ | `ghost_organization` | data source | native | `GET /api/organizations/{slug}` (public): profile, `members[]` (no roles), `pinned[]` |
+| 15 | ❌ | `ghost_organization_settings` | resource | native | Singleton. `GET`/`PATCH /api/organizations/{slug}/settings`: `basePermission`, `membersCanCreatePublic/PrivateRepositories`, `allowPrivateForks`, `oauthAppRestrictions`, `defaultBranch`, `description`, `website`, `location`, `email`. Delete resets to defaults or drops from state (decide and document). Display name is Better Auth only. Import by org slug |
+| 16 | ❌ | `ghost_organization_webhook` | resource | native | Same shape and gotchas as #9, on `/api/organizations/{slug}/webhooks`. Import `org:id` |
+| 17 | ❌ | `ghost_user_ssh_key` | resource | native | v3 `/user/keys` returns `id: null` and has no delete, so use native `/api/ssh-keys` throughout (`publicKey`, `title`; returns `fingerprint`). Compare keys without the comment. Everything is ForceNew. Import `id` |
+| 18 | ❌ | `ghost_user_ssh_signing_key` | resource | v3 | `POST`/`GET /user/ssh_signing_keys`, `GET`/`DELETE /{id}`. Everything is ForceNew. Import `id` |
+| 19 | ❌ | `ghost_user_gpg_key` | resource | native | `GET`/`POST /api/gpg-keys {publicKey}`, `DELETE /{id}`. Everything is ForceNew. Import `id` |
 
 ## Tier 3: nice to have
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 21 | ❌ | `ghost_oauth_app` | resource | native | User or org (`organization` is ForceNew). `POST /api/oauth-apps` or `/api/organizations/{slug}/oauth-apps`, then `GET`/`PATCH`/`DELETE /api/oauth-apps/{clientId}`. `clientSecret` is returned once. Import `clientId` |
-| 22 | ❌ | `ghost_organization_oauth_app_access` | resource | native | `PUT /api/organizations/{slug}/oauth-app-access/{clientId} {state}`, `DELETE`. Only matters with `oauthAppRestrictions`. Import `org:clientId` |
-| 23 | ❌ | `ghost_organization_pinned_repositories` | resource | native | `PUT /api/organizations/{slug}/pins` sets the whole ordered list (≤ 6). Read from the org profile. Delete = `PUT []`. Import by org slug |
-| 24 | ❌ | `ghost_repositories` | data source | native | `GET /api/repositories/{username}`. Public and private repos |
-| 25 | ❌ | `ghost_branches` | data source | native | `GET …/branches` returns names and `defaultBranch` |
+| 20 | ❌ | `ghost_oauth_app` | resource | native | User or org (`organization` is ForceNew). `POST /api/oauth-apps` or `/api/organizations/{slug}/oauth-apps`, then `GET`/`PATCH`/`DELETE /api/oauth-apps/{clientId}`. `clientSecret` is returned once. Import `clientId` |
+| 21 | ❌ | `ghost_organization_oauth_app_access` | resource | native | `PUT /api/organizations/{slug}/oauth-app-access/{clientId} {state}`, `DELETE`. Only matters with `oauthAppRestrictions`. Import `org:clientId` |
+| 22 | ❌ | `ghost_organization_pinned_repositories` | resource | native | `PUT /api/organizations/{slug}/pins` sets the whole ordered list (≤ 6). Read from the org profile. Delete = `PUT []`. Import by org slug |
+| 23 | ❌ | `ghost_repositories` | data source | native | `GET /api/repositories/{username}`. Public and private repos |
+| 24 | ❌ | `ghost_branches` | data source | native | `GET …/branches` returns names and `defaultBranch` |
+| 25 | ❌ | `ghost_release` | resource | v3 | CRUD on `/repos/{o}/{r}/releases[/{id}]`. `tag_name` is RequiresReplace (PATCH changes return 422). Don't model `make_latest`, `generate_release_notes`, `discussion_category_name`. Delete keeps the tag. Import `owner/repo:id`. Low demand: with the GitHub provider it mostly tags a freshly bootstrapped module repo, which relies on file writes Ghost lacks |
 | 26 | ❌ | `ghost_release` | data source | v3 | `/releases/latest`, `/releases/tags/{tag}`, `/releases/{id}` |
 | 27 | ❌ | `ghost_gitignore_templates` | data source | v3 | `/gitignore/templates[/{name}]` |
 | 28 | ❌ | `ghost_licenses` | data source | v3 | `/licenses[/{key}]` |
