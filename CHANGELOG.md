@@ -11,6 +11,7 @@ FEATURES:
 * **New Resource:** `ghost_repository_webhook`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
+* **New Data Source:** `ghost_team`
 
 ENHANCEMENTS:
 
