@@ -121,6 +121,7 @@ func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource 
 		NewTeamMembershipResource,
 		NewOrganizationSettingsResource,
 		NewOrganizationLogoResource,
+		NewOrganizationPublicMembershipResource,
 		NewOrganizationWebhookResource,
 		NewOrganizationPinnedRepositoriesResource,
 		NewUserSSHSigningKeyResource,
