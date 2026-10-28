@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -59,17 +61,34 @@ func TestGetCodeowners(t *testing.T) {
 	}
 }
 
-func TestGetCodeownersNotFound(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"statusCode":404,"error":"Error","message":"Branch not found: nope"}`))
-	})
+func TestGetCodeownersErrors(t *testing.T) {
+	for _, tc := range []struct {
+		status              int
+		message             string
+		notFound, forbidden bool
+	}{
+		{http.StatusNotFound, "Branch not found: nope", true, false},
+		{http.StatusNotFound, "Repository not found", true, false},
+		{http.StatusForbidden, "Forbidden", false, true},
+		{http.StatusUnauthorized, "Unauthorized", false, false},
+		{http.StatusInternalServerError, "boom", false, false},
+	} {
+		t.Run(tc.message, func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = fmt.Fprintf(w, `{"statusCode":%d,"message":%q}`, tc.status, tc.message)
+			})
 
-	_, err := c.GetCodeowners(context.Background(), "alice", "app", "nope")
-	if !IsNotFound(err) {
-		t.Fatalf("err = %v, want a 404", err)
-	}
-	if apiErr, ok := err.(*APIError); !ok || apiErr.Message != "Branch not found: nope" {
-		t.Errorf("err = %#v, want the API message", err)
+			got, err := c.GetCodeowners(context.Background(), "alice", "app", "nope")
+			if got != nil || err == nil || !strings.Contains(err.Error(), tc.message) {
+				t.Fatalf("got %v, %v, want an error with %q", got, err, tc.message)
+			}
+			if IsNotFound(err) != tc.notFound || IsForbidden(err) != tc.forbidden {
+				t.Errorf("IsNotFound = %v, IsForbidden = %v for %v", IsNotFound(err), IsForbidden(err), err)
+			}
+			if apiErr, ok := err.(*APIError); !ok || apiErr.Message != tc.message {
+				t.Errorf("err = %#v, want the API message", err)
+			}
+		})
 	}
 }
