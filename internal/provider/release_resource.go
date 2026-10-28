@@ -70,7 +70,8 @@ func (r *ReleaseResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a release in a Ghost repository, and creates its tag when the tag doesn't exist yet.\n\n" +
 			"Ghost creates the tag as soon as the release is created, **even for a draft**, so a draft's tag (though not the " +
-			"draft itself) is visible to anyone who can read the repository. Deleting the release keeps the tag. Ghost has no " +
+			"draft itself) is visible to anyone who can read the repository. The tag is annotated with the release's `name` " +
+			"(or the tag name), so a draft's title is public too. Deleting the release keeps the tag. Ghost has no " +
 			"API for deleting tags: delete one with `git push origin --delete <tag>`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
