@@ -456,6 +456,37 @@ resource "ghost_branch" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_branches (data source): a repository's branches, its default branch
+# (git HEAD) and which branches an active ruleset protects. depends_on reads
+# them after the playground's branches and rulesets exist.
+# ---------------------------------------------------------------------------
+
+# The minimal form: every branch, without SHAs.
+data "ghost_branches" "all" {
+  repository = ghost_repository.full.full_name
+
+  depends_on = [ghost_branch.minimal, ghost_branch.full, ghost_repository_ruleset.minimal, ghost_repository_ruleset.full]
+}
+
+# Every argument: only the branches an active ruleset protects, with the
+# commit each points at (one API request per branch).
+data "ghost_branches" "protected" {
+  repository              = ghost_repository.full.full_name
+  only_protected_branches = true
+  include_sha             = true
+
+  depends_on = [ghost_branch.minimal, ghost_branch.full, ghost_repository_ruleset.minimal, ghost_repository_ruleset.full]
+}
+
+# The other filter: the branches no active ruleset protects.
+data "ghost_branches" "unprotected" {
+  repository                  = ghost_repository.full.full_name
+  only_non_protected_branches = true
+
+  depends_on = [ghost_branch.minimal, ghost_branch.full, ghost_repository_ruleset.minimal, ghost_repository_ruleset.full]
+}
+
+# ---------------------------------------------------------------------------
 # ghost_branch_default (resource)
 # ---------------------------------------------------------------------------
 
@@ -670,6 +701,23 @@ output "branches" {
       full    = ghost_branch.full
       trunk   = ghost_branch.trunk
     } : key => { id = b.id, sha = b.sha }
+  }
+}
+
+output "branch_lists" {
+  description = "Branches listed by ghost_branches: all of ghost_repository.full's, the protected ones with their rules and SHAs, and the unprotected ones."
+  value = {
+    default_branch = data.ghost_branches.all.default_branch
+    all            = data.ghost_branches.all.names
+    protected = {
+      for b in data.ghost_branches.protected.branches : b.name => {
+        default   = b.default
+        protected = b.protected
+        rules     = b.rules
+        sha       = b.sha
+      }
+    }
+    unprotected = data.ghost_branches.unprotected.names
   }
 }
 
