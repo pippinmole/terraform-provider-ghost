@@ -132,6 +132,7 @@ func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataS
 		NewTeamDataSource,
 		NewOrganizationDataSource,
 		NewOrganizationTeamsDataSource,
+		NewRepositoriesDataSource,
 	}
 }
 
