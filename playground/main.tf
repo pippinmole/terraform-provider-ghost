@@ -80,6 +80,12 @@ variable "organization_email" {
   default     = ""
 }
 
+variable "ssh_signing_key_file" {
+  description = "Path to an SSH public key (.pub) to add as a commit signing key with ghost_user_ssh_signing_key, relative to the playground directory. Generate a throwaway one with: ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing (that directory is gitignored). Leave null to skip it."
+  type        = string
+  default     = null
+}
+
 provider "ghost" {
   token    = var.ghost_token
   base_url = var.ghost_base_url
@@ -547,6 +553,22 @@ resource "ghost_team_membership" "member" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_user_ssh_signing_key. Created only when var.ssh_signing_key_file is
+# set. It's added to the token's own account, and Ghost uses it to verify
+# commits signed with
+#   git -c gpg.format=ssh -c user.signingkey=<private key> commit -S
+# Changing the title or the key replaces it; the key's comment is ignored.
+# Import with the numeric key ID.
+# ---------------------------------------------------------------------------
+
+resource "ghost_user_ssh_signing_key" "playground" {
+  count = var.ssh_signing_key_file == null ? 0 : 1
+
+  title = "${var.name_prefix}-signing"
+  key   = file("${path.module}/${var.ssh_signing_key_file}")
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 
@@ -661,6 +683,16 @@ output "team_memberships" {
       { for r in ghost_team_membership.member : "member" => r },
     ) : key => { id = m.id, team_slug = m.team_slug, role = m.role }
   }
+}
+
+output "ssh_signing_key" {
+  description = "The SSH signing key the playground adds, when var.ssh_signing_key_file is set. Signed commits report this fingerprint as their keyId."
+  value = [for k in ghost_user_ssh_signing_key.playground : {
+    id          = k.id
+    title       = k.title
+    fingerprint = k.fingerprint
+    created_at  = k.created_at
+  }]
 }
 
 output "data_sources_agree" {

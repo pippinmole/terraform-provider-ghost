@@ -14,6 +14,7 @@ FEATURES:
 * **New Resource:** `ghost_team_membership`
 * **New Resource:** `ghost_organization_settings`
 * **New Resource:** `ghost_organization_webhook`
+* **New Resource:** `ghost_user_ssh_signing_key`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`
@@ -22,4 +23,5 @@ FEATURES:
 
 ENHANCEMENTS:
 
+* Error messages from Ghost's v3 validation failures (`422 Validation Failed`) now include the field-level details Ghost returns, e.g. `key already_exists`.
 * Requests that hit Ghost's rate limit (`429`) are retried once the limit resets, honouring `Retry-After` and `X-RateLimit-Reset`. When a response reports no requests left, the provider waits for the reset instead of sending more.

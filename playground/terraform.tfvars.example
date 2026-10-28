@@ -37,3 +37,8 @@ ghost_token = "ghost_pat_..."
 # profile, and destroy doesn't put the old values back.
 # manage_organization_settings = true
 # organization_email           = ""
+
+# Optional: an SSH public key to add as a commit signing key on your account
+# with ghost_user_ssh_signing_key. Generate a throwaway one first with:
+#   ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing
+# ssh_signing_key_file = ".tf-acc-keys/signing.pub"
