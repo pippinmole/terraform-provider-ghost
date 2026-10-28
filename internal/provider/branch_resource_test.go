@@ -577,6 +577,15 @@ func testAccRepository(t *testing.T, repoName string) (*client.Client, *client.R
 // the command line, and is masked in any output.
 func testAccPushCommit(t *testing.T, repoName, branch, tag string) string {
 	t.Helper()
+
+	return testAccPushSignedCommit(t, repoName, branch, tag, "")
+}
+
+// testAccPushSignedCommit is testAccPushCommit with the commit SSH-signed by
+// the private key file signingKey, or unsigned when it is "". An empty tag
+// pushes no tag.
+func testAccPushSignedCommit(t *testing.T, repoName, branch, tag, signingKey string) string {
+	t.Helper()
 	_, repo := testAccRepository(t, repoName)
 	token := os.Getenv(envToken)
 	auth := base64.StdEncoding.EncodeToString([]byte(repo.Owner.Login + ":" + token))
@@ -602,9 +611,18 @@ func testAccPushCommit(t *testing.T, repoName, branch, tag string) string {
 	}
 
 	git("clone", "-q", "--branch", branch, repo.CloneURL, ".")
-	git("commit", "-q", "--allow-empty", "-m", "tf-acc push")
-	git("tag", tag)
-	git("push", "-q", "origin", "HEAD:refs/heads/"+branch, "refs/tags/"+tag)
+	if signingKey == "" {
+		git("commit", "-q", "--allow-empty", "-m", "tf-acc push")
+	} else {
+		git("-c", "gpg.format=ssh", "-c", "user.signingkey="+signingKey,
+			"commit", "-q", "-S", "--allow-empty", "-m", "tf-acc signed push")
+	}
+	refs := []string{"HEAD:refs/heads/" + branch}
+	if tag != "" {
+		git("tag", tag)
+		refs = append(refs, "refs/tags/"+tag)
+	}
+	git(append([]string{"push", "-q", "origin"}, refs...)...)
 	return git("rev-parse", "HEAD")
 }
 
