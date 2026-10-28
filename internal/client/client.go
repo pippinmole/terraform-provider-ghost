@@ -115,6 +115,16 @@ type APIError struct {
 	Method     string
 	Path       string
 	Message    string
+	// Fields lists the v3 validation errors of a 422, e.g.
+	// {Field: "tag_name", Code: "already_exists"}.
+	Fields []FieldError
+}
+
+// FieldError is one entry of a v3 validation error's errors list.
+type FieldError struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 func (e *APIError) Error() string {
@@ -126,6 +136,22 @@ func IsNotFound(err error) bool {
 	var apiErr *APIError
 
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
+}
+
+// IsFieldError reports whether err is a v3 validation error (422) naming
+// field with code, e.g. ("tag_name", "already_exists").
+func IsFieldError(err error, field, code string) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusUnprocessableEntity {
+		return false
+	}
+	for _, f := range apiErr.Fields {
+		if f.Field == field && f.Code == code {
+			return true
+		}
+	}
+
+	return false
 }
 
 // IsConflict reports whether err is an APIError with a 409 status.
@@ -195,6 +221,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 				Method:     method,
 				Path:       ref.Path,
 				Message:    errorMessage(respBody, resp.Status),
+				Fields:     fieldErrors(respBody),
 			}
 		}
 
@@ -243,17 +270,25 @@ func (c *Client) send(ctx context.Context, method, u string, body []byte) (*http
 	return resp, respBody, nil
 }
 
+// fieldErrors decodes the errors list of a v3 validation error.
+func fieldErrors(body []byte) []FieldError {
+	var payload struct {
+		Errors []FieldError `json:"errors"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return nil
+	}
+
+	return payload.Errors
+}
+
 // errorMessage extracts the "message" field both API surfaces use for errors,
 // falling back to the HTTP status text. Validation errors carry a list of
 // messages, which are joined with "; ".
 func errorMessage(body []byte, status string) string {
 	var payload struct {
 		Message json.RawMessage `json:"message"`
-		Errors  []struct {
-			Field   string `json:"field"`
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"errors"`
+		Errors  []FieldError    `json:"errors"`
 	}
 	if json.Unmarshal(body, &payload) != nil {
 		return status
