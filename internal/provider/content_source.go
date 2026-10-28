@@ -139,12 +139,6 @@ func inspectBytes(b []byte) contentInfo {
 	return contentInfo{sha256: hex.EncodeToString(h[:]), size: int64(len(b)), head: bytes.Clone(head)}
 }
 
-func hashBytes(b []byte) (string, int64) {
-	info := inspectBytes(b)
-
-	return info.sha256, info.size
-}
-
 func inspectFile(name string) (contentInfo, error) {
 	f, err := os.Open(name)
 	if err != nil {
@@ -160,12 +154,6 @@ func inspectFile(name string) (contentInfo, error) {
 	}
 
 	return contentInfo{sha256: hex.EncodeToString(h.Sum(nil)), size: n, head: head.Bytes()}, nil
-}
-
-func hashFile(name string) (string, int64, error) {
-	info, err := inspectFile(name)
-
-	return info.sha256, info.size, err
 }
 
 // limitedBuffer keeps the first limit bytes written to it.
