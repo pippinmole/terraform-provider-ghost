@@ -72,7 +72,7 @@ Core value: the repository and what people configure on it straight away.
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 20 | ❌ | `ghost_oauth_app` | resource | native | User or org (`organization` is ForceNew). `POST /api/oauth-apps` or `/api/organizations/{slug}/oauth-apps`, then `GET`/`PATCH`/`DELETE /api/oauth-apps/{clientId}`. `clientSecret` is returned once. Import `clientId` |
+| 20 | 🚫 | `ghost_oauth_app` | resource | — | **Not possible with a PAT (checked 2026-10-28): no route lets a token create, read, change or delete an OAuth app.** Every native OAuth app route returns 403 "Personal access tokens cannot use this route; sign in instead": `GET`/`POST /api/oauth-apps`, `GET`/`POST /api/organizations/{slug}/oauth-apps` (org `pippin`, where the token user is an admin), `GET`/`PATCH`/`DELETE /api/oauth-apps/{clientId}`, `POST …/{clientId}/secret`, `GET …/{clientId}/organizations`, `GET /api/oauth-apps/authorized` and even `GET /api/oauth-apps/authorize?client_id=…` (401 anonymously). v3 has no OAuth app routes (`/user/oauth_apps`, `/user/applications`, `/applications`, `/oauth-apps`, `/orgs/{org}/oauth_apps` are 404 "Cannot GET …"), and GraphQL (`/api/graphql`) has no app mutations or types. No app was created during the probes. Register OAuth apps in the web UI |
 | 21 | ❌ | `ghost_organization_oauth_app_access` | resource | native | `PUT /api/organizations/{slug}/oauth-app-access/{clientId} {state}`, `DELETE`. Only matters with `oauthAppRestrictions`. Import `org:clientId` |
 | 22 | ❌ | `ghost_organization_pinned_repositories` | resource | native | `PUT /api/organizations/{slug}/pins` sets the whole ordered list (≤ 6). Read from the org profile. Delete = `PUT []`. Import by org slug |
 | 23 | ❌ | `ghost_repositories` | data source | native | `GET /api/repositories/{username}`. Public and private repos |
@@ -107,6 +107,7 @@ Core value: the repository and what people configure on it straight away.
 | 🚫 | `ghost_organization_membership` (roles, removal) | Better Auth only |
 | 🚫 | `ghost_user_ssh_key` (#17) | Native `/api/ssh-keys` rejects PATs; v3 `/user/keys` can add a key but has no id and no delete |
 | 🚫 | `ghost_user_gpg_key` (#19) | Native `/api/gpg-keys` rejects PATs, and v3 and GraphQL have no GPG key routes |
+| 🚫 | `ghost_oauth_app` (#20) | Every native `/api/oauth-apps` and `/api/organizations/{slug}/oauth-apps` route rejects PATs, and v3 and GraphQL have no OAuth app routes |
 | 🚫 | User profile (name, avatar) | Better Auth only (`PUT /api/users/avatar` only uploads) |
 | 🚫 | `ghost_repository_file` | No endpoint for writing file contents |
 | 🚫 | Tags | No create endpoint (tags only come from releases) |
