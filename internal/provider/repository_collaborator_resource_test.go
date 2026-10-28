@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -569,22 +568,13 @@ func testAccOutsideCollaboratorRepos(t *testing.T, org, username string) map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out struct {
-		Collaborators []struct {
-			Username     string `json:"username"`
-			Repositories []struct {
-				Slug    string `json:"slug"`
-				Role    string `json:"role"`
-				Pending bool   `json:"pending"`
-			} `json:"repositories"`
-		} `json:"collaborators"`
-	}
-	if err := c.Do(context.Background(), http.MethodGet, client.NativePath("organizations", org, "outside-collaborators"), nil, &out); err != nil {
+	collaborators, err := c.ListOutsideCollaborators(context.Background(), org)
+	if err != nil {
 		t.Fatalf("listing the outside collaborators of %s: %v", org, err)
 	}
 
 	repos := map[string]string{}
-	for _, oc := range out.Collaborators {
+	for _, oc := range collaborators {
 		if !strings.EqualFold(oc.Username, username) {
 			continue
 		}
