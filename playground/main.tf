@@ -116,7 +116,7 @@ resource "ghost_repository" "full" {
   auto_init          = true
   default_branch     = "main"
   gitignore_template = data.ghost_gitignore_templates.go.template.name
-  license_template   = "mit"
+  license_template   = data.ghost_licenses.mit.license.key
 }
 
 # A repository in an organization, created only when var.organization is set.
@@ -569,6 +569,20 @@ data "ghost_gitignore_templates" "go" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_licenses (data source)
+# ---------------------------------------------------------------------------
+
+# Every license, the keys license_template takes.
+data "ghost_licenses" "all" {}
+
+# One license and its text. Keys are matched case-insensitively, so the SPDX
+# ID works, and license.key is Ghost's key ("mit"), which ghost_repository.full
+# uses.
+data "ghost_licenses" "mit" {
+  key = "MIT"
+}
+
+# ---------------------------------------------------------------------------
 # ghost_branch_default (resource)
 # ---------------------------------------------------------------------------
 
@@ -1011,5 +1025,26 @@ output "gitignore_templates" {
     names     = data.ghost_gitignore_templates.all.names
     go_name   = data.ghost_gitignore_templates.go.template.name
     go_source = data.ghost_gitignore_templates.go.template.source
+  }
+}
+
+output "licenses" {
+  description = "The licenses, and the license ghost_repository.full was created with."
+  value = {
+    keys  = data.ghost_licenses.all.keys
+    names = { for l in data.ghost_licenses.all.licenses : l.key => "${l.name} (${l.spdx_id})" }
+    mit = {
+      key            = data.ghost_licenses.mit.license.key
+      name           = data.ghost_licenses.mit.license.name
+      spdx_id        = data.ghost_licenses.mit.license.spdx_id
+      html_url       = data.ghost_licenses.mit.license.html_url
+      description    = data.ghost_licenses.mit.license.description
+      implementation = data.ghost_licenses.mit.license.implementation
+      permissions    = data.ghost_licenses.mit.license.permissions
+      conditions     = data.ghost_licenses.mit.license.conditions
+      limitations    = data.ghost_licenses.mit.license.limitations
+      featured       = data.ghost_licenses.mit.license.featured
+      body           = data.ghost_licenses.mit.license.body
+    }
   }
 }

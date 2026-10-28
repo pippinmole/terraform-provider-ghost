@@ -119,7 +119,7 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				PlanModifiers:       createOnlyString,
 			},
 			"license_template": schema.StringAttribute{
-				MarkdownDescription: "A license template to apply at creation, e.g. `mit`. Changing it forces a new repository, except when it was unset (e.g. after import).",
+				MarkdownDescription: "A license template to apply at creation, e.g. `mit` (`ghost_licenses` lists the keys; Ghost matches the key case-insensitively, so an SPDX ID such as `MIT` also works). Changing it forces a new repository, except when it was unset (e.g. after import).",
 				Optional:            true,
 				PlanModifiers:       createOnlyString,
 			},
