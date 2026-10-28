@@ -336,3 +336,36 @@ func TestDownloadLogo(t *testing.T) {
 		}
 	}
 }
+
+func TestSetOrganizationMembershipPublic(t *testing.T) {
+	for _, tc := range []struct {
+		public bool
+		method string
+	}{{true, http.MethodPut}, {false, http.MethodDelete}} {
+		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != tc.method || r.URL.EscapedPath() != "/api/organizations/a%2Fb/public-members" {
+				t.Errorf("public=%t: got %s %s", tc.public, r.Method, r.URL.EscapedPath())
+			}
+			if r.ContentLength > 0 {
+				t.Errorf("public=%t: sent a body of %d bytes", tc.public, r.ContentLength)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		if err := c.SetOrganizationMembershipPublic(context.Background(), "a/b", tc.public); err != nil {
+			t.Fatalf("SetOrganizationMembershipPublic(%t): %v", tc.public, err)
+		}
+	}
+}
+
+func TestSetOrganizationMembershipPublicNotFound(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"message":"Organization not found: nope","statusCode":404}`)
+	})
+
+	err := c.SetOrganizationMembershipPublic(context.Background(), "nope", true)
+	if !IsNotFound(err) || !strings.Contains(err.Error(), "Organization not found: nope") {
+		t.Fatalf("got %v", err)
+	}
+}

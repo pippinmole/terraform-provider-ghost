@@ -270,3 +270,18 @@ func (c *Client) DownloadLogo(ctx context.Context, logoURL string, w io.Writer) 
 
 	return c.Download(ctx, u.EscapedPath(), w)
 }
+
+// SetOrganizationMembershipPublic makes the token user's own membership of
+// the organization public (listed on the organization's People tab for
+// everyone, and the organization on their profile) or private (seen only by
+// other members). It can't change anyone else's. Only the native API has
+// this; read the result back from the Public field of the user's entry in
+// GetOrganization's Members.
+func (c *Client) SetOrganizationMembershipPublic(ctx context.Context, org string, public bool) error {
+	method := http.MethodDelete
+	if public {
+		method = http.MethodPut
+	}
+
+	return c.Do(ctx, method, NativePath("organizations", org, "public-members"), nil, nil)
+}
