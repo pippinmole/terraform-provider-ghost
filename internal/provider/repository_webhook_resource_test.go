@@ -649,14 +649,13 @@ func verifyWebhookSignature(secret, body, header string) bool {
 	return hmac.Equal([]byte(header), []byte("sha256="+hex.EncodeToString(mac.Sum(nil))))
 }
 
-// testAccCheckWebhookDelivery waits for a delivery of event to the webhook in
-// state and checks it is signed with the secret in state (never printed),
-// and not with notSecret when given. With succeeded, the endpoint must also
-// have answered 2xx.
+// testAccCheckWebhookDelivery waits for a delivery of event to the
+// repository webhook in state and checks it is signed with the secret in
+// state (never printed), and not with notSecret when given. With succeeded,
+// the endpoint must also have answered 2xx.
 func testAccCheckWebhookDelivery(event string, succeeded bool, notSecret *string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs := s.RootModule().Resources[testAccWebhookAddress]
-		secret := rs.Primary.Attributes["secret"]
 		owner, repo, err := client.SplitFullName(rs.Primary.Attributes["repository"])
 		if err != nil {
 			return err
@@ -665,36 +664,41 @@ func testAccCheckWebhookDelivery(event string, succeeded bool, notSecret *string
 		if err != nil {
 			return err
 		}
-		hooks := c.RepositoryWebhooks(owner, repo)
+		return testAccWaitWebhookDelivery(c.RepositoryWebhooks(owner, repo), rs.Primary.Attributes, event, succeeded, notSecret)
+	}
+}
 
-		deadline := time.Now().Add(60 * time.Second)
-		for {
-			deliveries, err := hooks.ListDeliveries(context.Background(), rs.Primary.Attributes["webhook_id"])
-			if err != nil {
-				return err
-			}
-			for _, d := range deliveries {
-				if d.Event != event || len(d.Attempts) == 0 {
-					continue
-				}
-				a := d.Attempts[0]
-				if succeeded && (a.StatusCode == nil || *a.StatusCode < 200 || *a.StatusCode > 299) {
-					continue
-				}
-				header := a.RequestHeaders["X-Hub-Signature-256"]
-				if !verifyWebhookSignature(secret, d.Body, header) {
-					return fmt.Errorf("%s delivery %s is not signed with the secret in state", event, d.ID)
-				}
-				if notSecret != nil && verifyWebhookSignature(*notSecret, d.Body, header) {
-					return fmt.Errorf("%s delivery %s is signed with the old secret", event, d.ID)
-				}
-				return nil
-			}
-			if time.Now().After(deadline) {
-				return fmt.Errorf("no %s delivery (succeeded=%v) within 60s", event, succeeded)
-			}
-			time.Sleep(4 * time.Second)
+// testAccWaitWebhookDelivery waits up to 60s for a delivery of event to the
+// webhook whose state attributes are attrs, and checks its signature.
+func testAccWaitWebhookDelivery(hooks *client.Webhooks, attrs map[string]string, event string, succeeded bool, notSecret *string) error {
+	secret := attrs["secret"]
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		deliveries, err := hooks.ListDeliveries(context.Background(), attrs["webhook_id"])
+		if err != nil {
+			return err
 		}
+		for _, d := range deliveries {
+			if d.Event != event || len(d.Attempts) == 0 {
+				continue
+			}
+			a := d.Attempts[0]
+			if succeeded && (a.StatusCode == nil || *a.StatusCode < 200 || *a.StatusCode > 299) {
+				continue
+			}
+			header := a.RequestHeaders["X-Hub-Signature-256"]
+			if !verifyWebhookSignature(secret, d.Body, header) {
+				return fmt.Errorf("%s delivery %s is not signed with the secret in state", event, d.ID)
+			}
+			if notSecret != nil && verifyWebhookSignature(*notSecret, d.Body, header) {
+				return fmt.Errorf("%s delivery %s is signed with the old secret", event, d.ID)
+			}
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("no %s delivery (succeeded=%v) within 60s", event, succeeded)
+		}
+		time.Sleep(4 * time.Second)
 	}
 }
 
