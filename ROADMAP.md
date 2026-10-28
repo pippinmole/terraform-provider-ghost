@@ -89,7 +89,7 @@ Core value: the repository and what people configure on it straight away.
 
 | # | Status | Name | Kind | API | Notes |
 | - | ------ | ---- | ---- | --- | ----- |
-| 32 | ❌ | `ghost_repository_subscription` | resource | native | `GET`/`PUT …/subscription {level}`. Per user; delete = `participating` |
+| 32 | ✅ | `ghost_repository_subscription` | resource | native | Native `GET`/`PUT /api/repositories/{o}/{r}/subscription {level}`, `all`/`participating`/`ignore` (all three stored and read back). v3 has no subscription, watcher or `/user/subscriptions` routes, and nothing lists watched repos. For the token's user only. An unwatched repo reads `participating` (never 404), so create adopts and delete = `participating`. Missing repo: 404 "Repository not found". Owner and slug are case-insensitive. The level survives a rename; a recreated repo starts at `participating`. Org, private and other users' public repos work the same |
 | 33 | ❌ | `ghost_release_asset` | resource | mixed | Upload: `POST /api/uploads/repos/{o}/{r}/releases/{id}/assets` (raw bytes; a PAT works). Manage: v3 `/releases/assets/{id}`. ForceNew on content hash. Counts against storage quota |
 | 34 | ❌ | `ghost_organization_logo` | resource | native | `PUT`/`DELETE /api/organizations/{slug}/logo` (raw PNG/JPEG) |
 | 35 | ❌ | `ghost_organization_public_membership` | resource | native | `PUT`/`DELETE /public-members`, for yourself only |
