@@ -582,6 +582,26 @@ data "ghost_repository_rulesets" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_codeowners_errors (data source): checks the CODEOWNERS file Ghost
+# uses (.github/CODEOWNERS, then CODEOWNERS, then docs/CODEOWNERS) and lists
+# its errors: bad syntax, and owners that are unknown or lack write access.
+# The provider can't write files, so the playground repositories have no
+# CODEOWNERS: path is null and errors is empty until you push one.
+# ---------------------------------------------------------------------------
+
+# The default branch.
+data "ghost_codeowners_errors" "minimal" {
+  repository = ghost_repository.full.full_name
+}
+
+# Every argument: ref is a branch (with or without "refs/heads/"), a tag
+# name or a commit SHA.
+data "ghost_codeowners_errors" "full" {
+  repository = ghost_repository.full.full_name
+  ref        = ghost_branch.full.branch
+}
+
+# ---------------------------------------------------------------------------
 # ghost_release (resource)
 # ---------------------------------------------------------------------------
 
@@ -1310,5 +1330,26 @@ output "status_contexts" {
       for c in ghost_repository_ruleset.full.rules.required_status_checks.required_check : c.context
       if !contains(data.ghost_repository_status_contexts.full.contexts, c.context)
     ]
+  }
+}
+
+output "codeowners" {
+  description = "The CODEOWNERS file in effect on ghost_repository.full's default branch and on ghost_branch.full, and its errors."
+  value = {
+    default_branch = {
+      path   = data.ghost_codeowners_errors.minimal.path
+      errors = [for e in data.ghost_codeowners_errors.minimal.errors : "${e.path}:${e.line}:${e.column}: ${e.kind}: ${e.message}"]
+    }
+    ref = {
+      ref        = data.ghost_codeowners_errors.full.ref
+      repository = data.ghost_codeowners_errors.full.id
+      path       = data.ghost_codeowners_errors.full.path
+      errors = [
+        for e in data.ghost_codeowners_errors.full.errors : {
+          line       = e.line, column = e.column, kind = e.kind, source = e.source
+          suggestion = e.suggestion, message = e.message, path = e.path
+        }
+      ]
+    }
   }
 }

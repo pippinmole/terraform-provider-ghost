@@ -34,6 +34,7 @@ FEATURES:
 * **New Data Source:** `ghost_repository_status_contexts`
 * **New Data Source:** `ghost_organization_members`
 * **New Data Source:** `ghost_repository_rulesets`
+* **New Data Source:** `ghost_codeowners_errors`
 
 ENHANCEMENTS:
 
