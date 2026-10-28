@@ -28,6 +28,7 @@ FEATURES:
 * **New Data Source:** `ghost_gitignore_templates`
 * **New Data Source:** `ghost_licenses`
 * **New Data Source:** `ghost_repository_status_contexts`
+* **New Data Source:** `ghost_organization_members`
 
 ENHANCEMENTS:
 
