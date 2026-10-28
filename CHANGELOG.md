@@ -13,6 +13,7 @@ FEATURES:
 * **New Resource:** `ghost_repository_collaborator`
 * **New Resource:** `ghost_team_membership`
 * **New Resource:** `ghost_organization_settings`
+* **New Resource:** `ghost_organization_webhook`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`
