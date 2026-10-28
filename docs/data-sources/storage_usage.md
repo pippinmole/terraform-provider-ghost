@@ -4,14 +4,14 @@ page_title: "ghost_storage_usage Data Source - ghost"
 subcategory: ""
 description: |-
   Reads the storage a Ghost account uses against each of its quotas, in bytes: git data in its repositories, forks, Git LFS objects and release assets. Use it in a check block or a precondition to warn before a push or an upload would go over a quota.
-  Ghost shows storage usage only to the account itself, so owner must be the user that owns the provider's token or an organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository stops counting at once.
+  Ghost shows storage usage only to the account itself, so owner must be the user that owns the provider's token or an organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository or release asset stops counting at once. Deleted attachments stop counting a day later, and deleting a branch frees nothing.
 ---
 
 # ghost_storage_usage (Data Source)
 
 Reads the storage a Ghost account uses against each of its quotas, in bytes: git data in its repositories, forks, Git LFS objects and release assets. Use it in a `check` block or a `precondition` to warn before a push or an upload would go over a quota.
 
-Ghost shows storage usage only to the account itself, so `owner` must be the user that owns the provider's token or an organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository stops counting at once.
+Ghost shows storage usage only to the account itself, so `owner` must be the user that owns the provider's token or an organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository or release asset stops counting at once. Deleted attachments stop counting a day later, and deleting a branch frees nothing.
 
 ## Example Usage
 

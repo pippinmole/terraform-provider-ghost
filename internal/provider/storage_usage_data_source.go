@@ -82,7 +82,8 @@ func (d *StorageUsageDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"forks, Git LFS objects and release assets. Use it in a `check` block or a `precondition` to warn before a push or an upload " +
 			"would go over a quota.\n\n" +
 			"Ghost shows storage usage only to the account itself, so `owner` must be the user that owns the provider's token or an " +
-			"organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository stops counting at once.",
+			"organization that user belongs to. The figures are current: a push counts as soon as it lands, and a deleted repository or release asset stops counting at once. " +
+			"Deleted attachments stop counting a day later, and deleting a branch frees nothing.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The same as `owner`.",
