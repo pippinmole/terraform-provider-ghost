@@ -92,6 +92,12 @@ variable "organization_logo_from_base64" {
   default     = false
 }
 
+variable "organization_public_membership" {
+  description = "Set to true to make your membership of var.organization public with ghost_organization_public_membership, or false to keep it private (Terraform then reverts it if it's made public). Leave null to not manage it. Destroy always makes it private. You must be a member of the organization."
+  type        = bool
+  default     = null
+}
+
 variable "organization_email" {
   description = "Public email address for var.organization's profile, used when var.manage_organization_settings is true. The default, \"\", clears it."
   type        = string
@@ -306,6 +312,21 @@ resource "ghost_organization_logo" "this" {
   organization   = var.organization
   file           = var.organization_logo_from_base64 ? null : "${path.module}/organization-logo.png"
   content_base64 = var.organization_logo_from_base64 ? filebase64("${path.module}/organization-logo.png") : null
+}
+
+# ---------------------------------------------------------------------------
+# ghost_organization_public_membership (resource). Created only when
+# var.organization and var.organization_public_membership are set. It is
+# always your own membership (the token's user): Ghost has no way to change
+# anyone else's. public defaults to true; destroy makes the membership
+# private. Import it with the organization's slug.
+# ---------------------------------------------------------------------------
+
+resource "ghost_organization_public_membership" "this" {
+  count = var.organization != null && var.organization_public_membership != null ? 1 : 0
+
+  organization = var.organization
+  public       = var.organization_public_membership
 }
 
 # ---------------------------------------------------------------------------
@@ -1118,6 +1139,14 @@ output "organization_logo" {
     content_type   = l.content_type
     size           = l.size
     content_sha256 = l.content_sha256
+  }])
+}
+
+output "organization_public_membership" {
+  description = "Your membership of var.organization, when var.organization_public_membership is set."
+  value = one([for m in ghost_organization_public_membership.this : {
+    username = m.username
+    public   = m.public
   }])
 }
 

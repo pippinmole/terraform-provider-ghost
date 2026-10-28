@@ -50,6 +50,11 @@ ghost_token = "ghost_pat_..."
 # manage_organization_logo      = true
 # organization_logo_from_base64 = false
 
+# Optional: make your membership of that organization public (true) or keep
+# it private (false) with ghost_organization_public_membership. Destroy makes
+# it private again.
+# organization_public_membership = true
+
 # Optional: an SSH public key to add as a commit signing key on your account
 # with ghost_user_ssh_signing_key. Generate a throwaway one first with:
 #   ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing
