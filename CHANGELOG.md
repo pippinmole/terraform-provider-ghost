@@ -33,6 +33,7 @@ FEATURES:
 * **New Data Source:** `ghost_licenses`
 * **New Data Source:** `ghost_repository_status_contexts`
 * **New Data Source:** `ghost_organization_members`
+* **New Data Source:** `ghost_repository_rulesets`
 
 ENHANCEMENTS:
 

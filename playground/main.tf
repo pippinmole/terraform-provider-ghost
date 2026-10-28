@@ -570,6 +570,18 @@ data "ghost_repository_status_contexts" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_rulesets (data source): every ruleset on a repository, in
+# the same shape as ghost_repository_ruleset, with patterns as Ghost stores
+# them ("main" reads back as "refs/heads/main"). depends_on makes it read
+# after the rulesets above are created.
+# ---------------------------------------------------------------------------
+
+data "ghost_repository_rulesets" "full" {
+  repository = ghost_repository.full.full_name
+  depends_on = [ghost_repository_ruleset.minimal, ghost_repository_ruleset.full]
+}
+
+# ---------------------------------------------------------------------------
 # ghost_release (resource)
 # ---------------------------------------------------------------------------
 
@@ -1265,6 +1277,26 @@ output "licenses" {
       limitations    = data.ghost_licenses.mit.license.limitations
       featured       = data.ghost_licenses.mit.license.featured
       body           = data.ghost_licenses.mit.license.body
+    }
+  }
+}
+
+output "rulesets" {
+  description = "Every ruleset on ghost_repository.full: its import ID, web page, enforcement, patterns and enabled rules."
+  value = {
+    for rs in data.ghost_repository_rulesets.full.rulesets : rs.name => {
+      import_id     = "${data.ghost_repository_rulesets.full.id}:${rs.ruleset_id}"
+      numeric_id    = rs.numeric_id
+      node_id       = rs.node_id
+      html_url      = rs.html_url
+      target        = rs.target
+      enforcement   = rs.enforcement
+      include       = rs.conditions.ref_name.include
+      exclude       = rs.conditions.ref_name.exclude
+      bypass        = [for a in coalesce(rs.bypass_actors, []) : "${a.actor_type}:${coalesce(a.role, a.team_id, "-")}:${a.bypass_mode}"]
+      rules         = [for k in ["creation", "update", "deletion", "non_fast_forward", "required_linear_history", "required_signatures"] : k if rs.rules[k]]
+      pull_request  = rs.rules.pull_request
+      status_checks = rs.rules.required_status_checks
     }
   }
 }
