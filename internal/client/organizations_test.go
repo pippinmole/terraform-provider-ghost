@@ -148,3 +148,40 @@ func TestUpdateOrganizationSettingsValidation(t *testing.T) {
 		t.Errorf("UpdateOrganizationSettings error = %v, want a 400", err)
 	}
 }
+
+func TestSetOrganizationPins(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		slugs []string
+		want  string
+	}{
+		{"ordered", []string{"web", "api"}, `{"repositories":["web","api"]}`},
+		{"nil clears", nil, `{"repositories":[]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				if r.Method != http.MethodPut || r.URL.EscapedPath() != "/api/organizations/my%20org/pins" || string(body) != tt.want {
+					t.Errorf("got %s %s %s", r.Method, r.URL.EscapedPath(), body)
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			if err := c.SetOrganizationPins(context.Background(), "my org", tt.slugs); err != nil {
+				t.Fatalf("SetOrganizationPins: %v", err)
+			}
+		})
+	}
+}
+
+func TestSetOrganizationPinsNotFound(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"statusCode":404,"error":"Error","message":"Repository not found"}`))
+	})
+
+	err := c.SetOrganizationPins(context.Background(), "acme", []string{"nope"})
+	if !IsNotFound(err) {
+		t.Errorf("SetOrganizationPins error = %v, want a 404", err)
+	}
+}

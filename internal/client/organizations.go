@@ -173,3 +173,21 @@ func (c *Client) UpdateOrganizationSettings(ctx context.Context, slug string, re
 
 	return &s, nil
 }
+
+// MaxPinnedRepositories is the most repositories an organization can pin.
+const MaxPinnedRepositories = 6
+
+// SetOrganizationPins replaces the repositories pinned to the organization's
+// profile with the ones named by slugs, in that order. Only admins can pin.
+// Ghost matches each slug exactly, so it must be the repository's lower-case
+// slug, and it rejects the whole list (with a 404 "Repository not found") if
+// any slug isn't one of the organization's repositories. An empty list
+// unpins everything.
+func (c *Client) SetOrganizationPins(ctx context.Context, org string, slugs []string) error {
+	if slugs == nil {
+		slugs = []string{}
+	}
+	body := map[string][]string{"repositories": slugs}
+
+	return c.Do(ctx, http.MethodPut, NativePath("organizations", org, "pins"), body, nil)
+}
