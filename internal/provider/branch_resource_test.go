@@ -587,11 +587,36 @@ func testAccPushCommit(t *testing.T, repoName, branch, tag string) string {
 func testAccPushSignedCommit(t *testing.T, repoName, branch, tag, signingKey string) string {
 	t.Helper()
 	_, repo := testAccRepository(t, repoName)
+	git := testAccGit(t, repo)
+
+	git("clone", "-q", "--branch", branch, repo.CloneURL, ".")
+	if signingKey == "" {
+		git("commit", "-q", "--allow-empty", "-m", "tf-acc push")
+	} else {
+		git("-c", "gpg.format=ssh", "-c", "user.signingkey="+signingKey,
+			"commit", "-q", "-S", "--allow-empty", "-m", "tf-acc signed push")
+	}
+	refs := []string{"HEAD:refs/heads/" + branch}
+	if tag != "" {
+		git("tag", tag)
+		refs = append(refs, "refs/tags/"+tag)
+	}
+	git(append([]string{"push", "-q", "origin"}, refs...)...)
+	return git("rev-parse", "HEAD")
+}
+
+// testAccGit returns a function that runs git in a new temporary directory,
+// authenticated to repo's owner with the test token, and returns its trimmed
+// output. The token is passed in the environment, never on the command line,
+// and is masked in any output.
+func testAccGit(t *testing.T, repo *client.Repository) func(args ...string) string {
+	t.Helper()
 	token := os.Getenv(envToken)
 	auth := base64.StdEncoding.EncodeToString([]byte(repo.Owner.Login + ":" + token))
 	dir := t.TempDir()
 
-	git := func(args ...string) string {
+	return func(args ...string) string {
+		t.Helper()
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
@@ -609,21 +634,6 @@ func testAccPushSignedCommit(t *testing.T, repoName, branch, tag, signingKey str
 		}
 		return strings.TrimSpace(string(out))
 	}
-
-	git("clone", "-q", "--branch", branch, repo.CloneURL, ".")
-	if signingKey == "" {
-		git("commit", "-q", "--allow-empty", "-m", "tf-acc push")
-	} else {
-		git("-c", "gpg.format=ssh", "-c", "user.signingkey="+signingKey,
-			"commit", "-q", "-S", "--allow-empty", "-m", "tf-acc signed push")
-	}
-	refs := []string{"HEAD:refs/heads/" + branch}
-	if tag != "" {
-		git("tag", tag)
-		refs = append(refs, "refs/tags/"+tag)
-	}
-	git(append([]string{"push", "-q", "origin"}, refs...)...)
-	return git("rev-parse", "HEAD")
 }
 
 // testAccDeleteBranch deletes a branch outside Terraform.
