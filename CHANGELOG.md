@@ -35,6 +35,7 @@ FEATURES:
 * **New Data Source:** `ghost_organization_members`
 * **New Data Source:** `ghost_repository_rulesets`
 * **New Data Source:** `ghost_codeowners_errors`
+* **New Data Source:** `ghost_storage_usage`
 
 ENHANCEMENTS:
 

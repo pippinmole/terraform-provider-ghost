@@ -602,6 +602,26 @@ data "ghost_codeowners_errors" "full" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_storage_usage (data source): the bytes an account uses against each
+# of its quotas (repositories, forks, Git LFS and release assets). Ghost
+# shows it only for the token's own user and organizations it belongs to.
+# ---------------------------------------------------------------------------
+
+# The token's own user. Depends on the repository and release asset so it
+# counts them.
+data "ghost_storage_usage" "minimal" {
+  depends_on = [ghost_repository.full, ghost_release_asset.file, ghost_release_asset.content, ghost_release_asset.content_base64]
+}
+
+# Every argument: owner is a login, matched case-insensitively.
+data "ghost_storage_usage" "organization" {
+  count = var.organization == null ? 0 : 1
+
+  owner      = var.organization
+  depends_on = [ghost_repository.organization]
+}
+
+# ---------------------------------------------------------------------------
 # ghost_release (resource)
 # ---------------------------------------------------------------------------
 
@@ -1350,6 +1370,24 @@ output "codeowners" {
           suggestion = e.suggestion, message = e.message, path = e.path
         }
       ]
+    }
+  }
+}
+
+output "storage_usage" {
+  description = "Bytes used and quotas (null when none applies) of the token's user and of var.organization."
+  value = {
+    for k, u in merge(
+      { user = data.ghost_storage_usage.minimal },
+      { for d in data.ghost_storage_usage.organization : "organization" => d },
+      ) : k => {
+      owner           = u.owner
+      used_bytes      = u.used_bytes
+      quota_bytes     = u.quota_bytes
+      max_asset_bytes = u.max_asset_bytes
+      fork            = u.fork
+      lfs             = u.lfs
+      asset           = u.asset
     }
   }
 }
