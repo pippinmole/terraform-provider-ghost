@@ -68,6 +68,18 @@ variable "team_member" {
   default     = null
 }
 
+variable "manage_organization_settings" {
+  description = "Set to true to manage var.organization's settings with ghost_organization_settings. Applying overwrites its base permission, repository policies, default branch and profile, and destroy leaves them as they are: it doesn't restore the old values. You must be an admin of the organization."
+  type        = bool
+  default     = false
+}
+
+variable "organization_email" {
+  description = "Public email address for var.organization's profile, used when var.manage_organization_settings is true. The default, \"\", clears it."
+  type        = string
+  default     = ""
+}
+
 provider "ghost" {
   token    = var.ghost_token
   base_url = var.ghost_base_url
@@ -176,6 +188,28 @@ data "ghost_organization" "this" {
   count = var.organization == null ? 0 : 1
 
   slug = var.organization
+}
+
+# ---------------------------------------------------------------------------
+# ghost_organization_settings (resource). Created only when var.organization
+# is set and var.manage_organization_settings is true. Every argument is
+# optional and unset ones are left alone; destroy changes nothing.
+# ---------------------------------------------------------------------------
+
+resource "ghost_organization_settings" "this" {
+  count = var.organization != null && var.manage_organization_settings ? 1 : 0
+
+  organization                            = var.organization
+  base_permission                         = "read" # or none, triage, write, maintain, admin
+  members_can_create_public_repositories  = true
+  members_can_create_private_repositories = true
+  allow_private_forks                     = false
+  oauth_app_restrictions                  = false
+  default_branch                          = "main"
+  description                             = "Managed by the Ghost Terraform playground"
+  website                                 = "https://web.ghost.procrastinator.fyi"
+  location                                = "" # "" clears a field
+  email                                   = var.organization_email
 }
 
 # ---------------------------------------------------------------------------
@@ -631,6 +665,15 @@ output "organization" {
       viewer_role             = o.viewer_role
     }
   ])
+}
+
+output "organization_settings" {
+  description = "var.organization's settings, when var.manage_organization_settings is true."
+  value = one([for s in ghost_organization_settings.this : {
+    base_permission = s.base_permission
+    default_branch  = s.default_branch
+    description     = s.description
+  }])
 }
 
 output "team" {

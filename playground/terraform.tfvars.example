@@ -30,3 +30,9 @@ ghost_token = "ghost_pat_..."
 # be invited with a token. Destroy takes them out of the team again.
 # team_maintainer = "alice"
 # team_member     = "bob"
+
+# Optional: manage that organization's settings with ghost_organization_settings.
+# This overwrites its base permission, repository policies, default branch and
+# profile, and destroy doesn't put the old values back.
+# manage_organization_settings = true
+# organization_email           = ""
