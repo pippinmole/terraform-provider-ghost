@@ -19,6 +19,7 @@ FEATURES:
 * **New Resource:** `ghost_release`
 * **New Resource:** `ghost_repository_subscription`
 * **New Resource:** `ghost_release_asset`
+* **New Resource:** `ghost_organization_logo`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`
