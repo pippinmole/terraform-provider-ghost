@@ -590,6 +590,45 @@ data "ghost_release" "by_tag" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_release_asset (resource)
+# ---------------------------------------------------------------------------
+
+# Every argument, with the content from a local file. The file is hashed at
+# plan time (content_sha256), so editing it replaces the asset; renaming it or
+# changing the label is done in place. Import it with
+# "<owner>/<slug>:<asset_id>".
+resource "ghost_release_asset" "file" {
+  repository   = ghost_repository.full.full_name
+  release_id   = ghost_release.full.release_id
+  name         = "release-notes.txt"
+  label        = "Release notes"
+  content_type = "text/plain"
+  file         = "${path.module}/release-asset.txt"
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# Inline text. content_type defaults to application/octet-stream.
+resource "ghost_release_asset" "content" {
+  repository = ghost_repository.full.full_name
+  release_id = ghost_release.full.release_id
+  name       = "checksums.txt"
+  content    = "${ghost_release_asset.file.content_sha256}  release-notes.txt\n"
+}
+
+# Binary content, base64-encoded (filebase64("…") works too). Assets of a
+# draft release are visible only to people who can write to the repository.
+resource "ghost_release_asset" "content_base64" {
+  repository     = ghost_repository.full.full_name
+  release_id     = ghost_release.draft.release_id
+  name           = "data.bin"
+  content_type   = "application/octet-stream"
+  content_base64 = base64encode("playground\u0000data")
+}
+
+# ---------------------------------------------------------------------------
 # ghost_gitignore_templates (data source)
 # ---------------------------------------------------------------------------
 
@@ -1112,6 +1151,22 @@ output "releases" {
       html_url     = r.html_url
       published_at = r.published_at
       assets       = [for a in r.assets : a.browser_download_url]
+    }
+  }
+}
+
+output "release_assets" {
+  description = "The assets uploaded with ghost_release_asset: download links, sizes and hashes."
+  value = {
+    for k, a in {
+      file           = ghost_release_asset.file
+      content        = ghost_release_asset.content
+      content_base64 = ghost_release_asset.content_base64
+      } : k => {
+      id                   = a.id
+      browser_download_url = a.browser_download_url
+      size                 = a.size
+      content_sha256       = a.content_sha256
     }
   }
 }
