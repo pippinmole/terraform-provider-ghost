@@ -1,10 +1,13 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -232,6 +235,104 @@ func TestListOutsideCollaboratorsErrors(t *testing.T) {
 		var apiErr *APIError
 		if !errors.As(err, &apiErr) || apiErr.StatusCode != status || apiErr.Message != "nope" {
 			t.Errorf("status %d: error = %v", status, err)
+		}
+	}
+}
+
+func TestSetOrganizationLogo(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.EscapedPath() != "/api/organizations/my%20org/logo" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "image/jpeg" {
+			t.Errorf("Content-Type = %q", ct)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" || r.ContentLength != 4 {
+			t.Errorf("Authorization %q, Content-Length %d", r.Header.Get("Authorization"), r.ContentLength)
+		}
+		if b, _ := io.ReadAll(r.Body); string(b) != "\xff\xd8\xff\xe0" {
+			t.Errorf("body = %q", b)
+		}
+		_, _ = io.WriteString(w, `{"url":"https://img.test/api/users/avatars/u1/a.jpg"}`)
+	})
+
+	u, err := c.SetOrganizationLogo(context.Background(), "my org", "image/jpeg", strings.NewReader("\xff\xd8\xff\xe0"), 4)
+	if err != nil {
+		t.Fatalf("SetOrganizationLogo: %v", err)
+	}
+	if u != "https://img.test/api/users/avatars/u1/a.jpg" {
+		t.Errorf("url = %q", u)
+	}
+}
+
+func TestSetOrganizationLogoRetriesFromStart(t *testing.T) {
+	var calls atomic.Int32
+	c, _ := newRateLimitedClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if b, _ := io.ReadAll(r.Body); string(b) != "\x89PNG" {
+			t.Errorf("attempt %d body = %q", calls.Load()+1, b)
+		}
+		if calls.Add(1) == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = io.WriteString(w, `{"url":"https://img.test/l.png"}`)
+	})
+
+	if _, err := c.SetOrganizationLogo(context.Background(), "acme", "image/png", strings.NewReader("\x89PNG"), 4); err != nil {
+		t.Fatalf("SetOrganizationLogo: %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Errorf("calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestSetOrganizationLogoErrors(t *testing.T) {
+	for _, status := range []int{400, 403, 404, 413, 415} {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = io.WriteString(w, `{"statusCode":0,"message":"nope"}`)
+		})
+		_, err := c.SetOrganizationLogo(context.Background(), "acme", "image/png", strings.NewReader("x"), 1)
+		if !HasStatus(err, status) || !strings.Contains(err.Error(), "nope") {
+			t.Errorf("status %d: err = %v", status, err)
+		}
+	}
+}
+
+func TestRemoveOrganizationLogo(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.EscapedPath() != "/api/organizations/a%2Fb/logo" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	if err := c.RemoveOrganizationLogo(context.Background(), "a/b"); err != nil {
+		t.Fatalf("RemoveOrganizationLogo: %v", err)
+	}
+}
+
+func TestDownloadLogo(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/users/avatars/u1/a.png" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, "\x89PNG")
+	})
+
+	var buf bytes.Buffer
+	if err := c.DownloadLogo(context.Background(), c.baseURL.String()+"/api/users/avatars/u1/a.png", &buf); err != nil {
+		t.Fatalf("DownloadLogo: %v", err)
+	}
+	if buf.String() != "\x89PNG" {
+		t.Errorf("downloaded %q", buf.String())
+	}
+
+	// The token is never sent to another host, or outside the API.
+	for _, u := range []string{"https://elsewhere.test/api/users/avatars/u1/a.png", c.baseURL.String() + "/other/a.png", "::"} {
+		if err := c.DownloadLogo(context.Background(), u, &buf); err == nil {
+			t.Errorf("DownloadLogo(%q) succeeded", u)
 		}
 	}
 }

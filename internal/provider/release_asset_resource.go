@@ -1,17 +1,12 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -370,7 +365,7 @@ func (r *ReleaseAssetResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	if content.size == 0 {
-		resp.Diagnostics.AddAttributeError(content.attr, "Empty asset", "Ghost doesn't accept empty files: the asset's content must be at least 1 byte.")
+		resp.Diagnostics.Append(plan.source().emptyError())
 		return
 	}
 
@@ -650,135 +645,29 @@ func normalizedLabel(s types.String) string {
 	return s.ValueString()
 }
 
+// source returns where the asset's content comes from.
+func (m releaseAssetResourceModel) source() contentSource {
+	return contentSource{File: m.File, Content: m.Content, ContentBase64: m.ContentBase64, noun: "asset"}
+}
+
 // sameContentSource reports whether plan and state take their content from
 // the same file, string or base64 string.
 func sameContentSource(plan, state releaseAssetResourceModel) bool {
-	return plan.File.Equal(state.File) && plan.Content.Equal(state.Content) && plan.ContentBase64.Equal(state.ContentBase64)
+	return plan.source().same(state.source())
 }
 
 // planContentHash hashes the planned content. known is false when the
 // content isn't known yet: a value that is unknown until apply, or a file
 // that doesn't exist yet.
 func planContentHash(m releaseAssetResourceModel) (sum string, size int64, known bool, diags diag.Diagnostics) {
-	switch {
-	case m.File.IsUnknown() || m.Content.IsUnknown() || m.ContentBase64.IsUnknown():
-		return "", 0, false, nil
-	case !m.Content.IsNull():
-		sum, size = hashBytes([]byte(m.Content.ValueString()))
-	case !m.ContentBase64.IsNull():
-		b, err := base64.StdEncoding.DecodeString(m.ContentBase64.ValueString())
-		if err != nil {
-			diags.AddAttributeError(path.Root("content_base64"), "Invalid base64", err.Error())
-			return "", 0, false, diags
-		}
-		sum, size = hashBytes(b)
-	case !m.File.IsNull():
-		var err error
-		sum, size, err = hashFile(m.File.ValueString())
-		if errors.Is(err, fs.ErrNotExist) {
-			return "", 0, false, nil
-		}
-		if err != nil {
-			diags.AddAttributeError(path.Root("file"), "Can't read file", err.Error())
-			return "", 0, false, diags
-		}
-	default:
-		// ExactlyOneOf reports it.
-		return "", 0, false, nil
-	}
+	info, known, diags := m.source().inspect()
 
-	if size == 0 {
-		diags.AddAttributeError(contentAttr(m), "Empty asset", "Ghost doesn't accept empty files: the asset's content must be at least 1 byte.")
-		return "", 0, false, diags
-	}
-
-	return sum, size, true, nil
-}
-
-// contentAttr returns the attribute the content comes from.
-func contentAttr(m releaseAssetResourceModel) path.Path {
-	switch {
-	case !m.Content.IsNull():
-		return path.Root("content")
-	case !m.ContentBase64.IsNull():
-		return path.Root("content_base64")
-	default:
-		return path.Root("file")
-	}
-}
-
-func hashBytes(b []byte) (string, int64) {
-	h := sha256.Sum256(b)
-
-	return hex.EncodeToString(h[:]), int64(len(b))
-}
-
-func hashFile(name string) (string, int64, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return "", 0, err
-	}
-	defer func() { _ = f.Close() }()
-
-	h := sha256.New()
-	n, err := io.Copy(h, f)
-	if err != nil {
-		return "", 0, fmt.Errorf("reading %s: %w", name, err)
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), n, nil
-}
-
-// assetContent is the content to upload.
-type assetContent struct {
-	reader io.ReaderAt
-	size   int64
-	sha256 string
-	attr   path.Path
-	close  func() error
-}
-
-func (c *assetContent) Close() error {
-	if c.close == nil {
-		return nil
-	}
-
-	return c.close()
+	return info.sha256, info.size, known, diags
 }
 
 // openContent opens the configured content and hashes it.
 func openContent(m releaseAssetResourceModel) (*assetContent, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	attr := contentAttr(m)
-
-	switch {
-	case !m.Content.IsNull():
-		b := []byte(m.Content.ValueString())
-		sum, size := hashBytes(b)
-		return &assetContent{reader: bytes.NewReader(b), size: size, sha256: sum, attr: attr}, nil
-	case !m.ContentBase64.IsNull():
-		b, err := base64.StdEncoding.DecodeString(m.ContentBase64.ValueString())
-		if err != nil {
-			diags.AddAttributeError(attr, "Invalid base64", err.Error())
-			return nil, diags
-		}
-		sum, size := hashBytes(b)
-		return &assetContent{reader: bytes.NewReader(b), size: size, sha256: sum, attr: attr}, nil
-	}
-
-	name := m.File.ValueString()
-	sum, size, err := hashFile(name)
-	if err != nil {
-		diags.AddAttributeError(attr, "Can't read file", err.Error())
-		return nil, diags
-	}
-	f, err := os.Open(name)
-	if err != nil {
-		diags.AddAttributeError(attr, "Can't read file", err.Error())
-		return nil, diags
-	}
-
-	return &assetContent{reader: f, size: size, sha256: sum, attr: attr, close: f.Close}, nil
+	return m.source().open()
 }
 
 // releaseAssetID builds the "owner/slug:asset_id" ID of a release asset.

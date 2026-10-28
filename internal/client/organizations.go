@@ -3,7 +3,11 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 // Organization is an organization's public profile, as returned by the
@@ -230,4 +234,39 @@ func (c *Client) ListOutsideCollaborators(ctx context.Context, org string) ([]Ou
 	}
 
 	return out.Collaborators, nil
+}
+
+// SetOrganizationLogo uploads size bytes read from content, a PNG or JPEG
+// image (contentType image/png or image/jpeg), as the organization's logo,
+// replacing any logo it had, and returns the URL Ghost serves it from. Only
+// admins can set it.
+func (c *Client) SetOrganizationLogo(ctx context.Context, org, contentType string, content io.ReaderAt, size int64) (string, error) {
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := c.Upload(ctx, http.MethodPut, NativePath("organizations", org, "logo"), contentType, content, size, &out); err != nil {
+		return "", err
+	}
+
+	return out.URL, nil
+}
+
+// RemoveOrganizationLogo removes the organization's logo. Only admins can
+// remove it.
+func (c *Client) RemoveOrganizationLogo(ctx context.Context, org string) error {
+	return c.Do(ctx, http.MethodDelete, NativePath("organizations", org, "logo"), nil, nil)
+}
+
+// DownloadLogo copies the image served at logoURL, a logo or avatar URL
+// Ghost returned, to w. The URL must be on the API's host, under /api/.
+func (c *Client) DownloadLogo(ctx context.Context, logoURL string, w io.Writer) error {
+	u, err := url.Parse(logoURL)
+	if err != nil {
+		return fmt.Errorf("parsing logo URL %q: %w", logoURL, err)
+	}
+	if (u.Host != "" && !strings.EqualFold(u.Host, c.baseURL.Host)) || !strings.HasPrefix(u.Path, nativePrefix+"/") {
+		return fmt.Errorf("logo URL %q isn't served by the Ghost API at %s", logoURL, c.baseURL)
+	}
+
+	return c.Download(ctx, u.EscapedPath(), w)
 }
