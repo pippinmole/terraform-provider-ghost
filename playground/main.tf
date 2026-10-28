@@ -203,6 +203,39 @@ data "ghost_organization" "this" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repositories (data source): a user's or organization's repositories,
+# including the private ones the token's user can read. depends_on reads them
+# after the playground's repositories exist.
+# ---------------------------------------------------------------------------
+
+# Every repository of the token's user.
+data "ghost_repositories" "mine" {
+  owner = data.ghost_user.me.login
+
+  depends_on = [ghost_repository.minimal, ghost_repository.full]
+}
+
+# Every argument: the token user's private repositories whose name or
+# description contains var.name_prefix (ignoring case).
+data "ghost_repositories" "filtered" {
+  owner      = data.ghost_user.me.login
+  query      = var.name_prefix
+  visibility = "private"
+
+  depends_on = [ghost_repository.minimal, ghost_repository.full]
+}
+
+# An organization's repositories. Read only when var.organization is set.
+data "ghost_repositories" "organization" {
+  count = var.organization == null ? 0 : 1
+
+  owner = var.organization
+  query = var.name_prefix
+
+  depends_on = [ghost_repository.organization, ghost_repository.organization_team]
+}
+
+# ---------------------------------------------------------------------------
 # ghost_organization_settings (resource). Created only when var.organization
 # is set and var.manage_organization_settings is true. Every argument is
 # optional and unset ones are left alone; destroy changes nothing.
@@ -790,4 +823,30 @@ output "team" {
       repositories = { for r in t.repositories : r.full_name => r.role }
     }
   ])
+}
+
+output "repository_lists" {
+  description = "Repositories listed by ghost_repositories: all of the token user's, its private ones matching var.name_prefix, and var.organization's matching var.name_prefix."
+  value = {
+    mine     = data.ghost_repositories.mine.full_names
+    filtered = data.ghost_repositories.filtered.full_names
+    organization = one([
+      for o in data.ghost_repositories.organization : {
+        for r in o.repositories : r.full_name => {
+          id          = r.id
+          numeric_id  = r.numeric_id
+          name        = r.name
+          slug        = r.slug
+          description = r.description
+          visibility  = r.visibility
+          private     = r.private
+          fork        = r.fork
+          created_at  = r.created_at
+          updated_at  = r.updated_at
+          pushed_at   = r.pushed_at
+        }
+      }
+    ])
+    organization_slugs = one(data.ghost_repositories.organization[*].slugs)
+  }
 }
