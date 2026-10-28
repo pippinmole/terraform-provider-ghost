@@ -47,17 +47,19 @@ type ReleaseAuthor struct {
 
 // ReleaseAsset is a file attached to a release.
 type ReleaseAsset struct {
-	ID                 int64   `json:"id"`
-	NodeID             string  `json:"node_id"`
-	URL                string  `json:"url"`
-	BrowserDownloadURL string  `json:"browser_download_url"`
-	Name               string  `json:"name"`
-	Label              *string `json:"label"`
-	ContentType        string  `json:"content_type"`
-	Size               int64   `json:"size"`
-	DownloadCount      int64   `json:"download_count"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                 int64          `json:"id"`
+	NodeID             string         `json:"node_id"`
+	URL                string         `json:"url"`
+	BrowserDownloadURL string         `json:"browser_download_url"`
+	Name               string         `json:"name"`
+	Label              *string        `json:"label"`
+	State              string         `json:"state"`
+	ContentType        string         `json:"content_type"`
+	Size               int64          `json:"size"`
+	DownloadCount      int64          `json:"download_count"`
+	CreatedAt          string         `json:"created_at"`
+	UpdatedAt          string         `json:"updated_at"`
+	Uploader           *ReleaseAuthor `json:"uploader"`
 }
 
 var commitSHAPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
