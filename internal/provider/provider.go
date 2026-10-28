@@ -146,6 +146,7 @@ func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataS
 		NewRepositoryStatusContextsDataSource,
 		NewRepositoryRulesetsDataSource,
 		NewCodeownersErrorsDataSource,
+		NewStorageUsageDataSource,
 	}
 }
 
