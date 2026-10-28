@@ -213,6 +213,35 @@ resource "ghost_organization_settings" "this" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_organization_webhook (resource). Created only when var.organization is
+# set. An organization webhook receives the events of every repository in the
+# organization. Import it with "<organization>:<webhook_id>"; the secret is
+# null after import.
+# ---------------------------------------------------------------------------
+
+# The minimal form: active, with a secret Ghost generates. Ghost pings the URL
+# as soon as the webhook is created; Ghost's own web host answers 200.
+resource "ghost_organization_webhook" "minimal" {
+  count = var.organization != null ? 1 : 0
+
+  organization = var.organization
+  url          = "https://web.ghost.procrastinator.fyi/?playground=org-minimal"
+  events       = ["push"]
+}
+
+# Every argument. Change secret_rotation to replace the secret in place, e.g.
+# with time_rotating.
+resource "ghost_organization_webhook" "full" {
+  count = var.organization != null ? 1 : 0
+
+  organization    = var.organization
+  url             = "https://example.com/ghost-org-webhook"
+  events          = ["repository.edited", "label.created", "member.added", "member.removed"]
+  active          = false
+  secret_rotation = "2026-10"
+}
+
+# ---------------------------------------------------------------------------
 # ghost_issue_label (resource)
 # ---------------------------------------------------------------------------
 
@@ -586,6 +615,22 @@ output "repository_webhook_secrets" {
   description = "The secrets Ghost signs deliveries with (X-Hub-Signature-256)."
   sensitive   = true
   value       = { minimal = ghost_repository_webhook.minimal.secret, full = ghost_repository_webhook.full.secret }
+}
+
+output "organization_webhooks" {
+  description = "The organization webhooks the playground manages, when var.organization is set. The secrets are sensitive: read them with terraform output -json."
+  value = {
+    for key, hook in merge(
+      { for h in ghost_organization_webhook.minimal : "minimal" => h },
+      { for h in ghost_organization_webhook.full : "full" => h },
+    ) : key => { id = hook.id, active = hook.active, disabled_reason = hook.disabled_reason }
+  }
+}
+
+output "organization_webhook_secrets" {
+  description = "The secrets Ghost signs organization webhook deliveries with (X-Hub-Signature-256)."
+  sensitive   = true
+  value       = { for key, hooks in { minimal = ghost_organization_webhook.minimal, full = ghost_organization_webhook.full } : key => one(hooks[*].secret) }
 }
 
 output "team_repositories" {

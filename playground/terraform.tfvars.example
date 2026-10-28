@@ -10,7 +10,8 @@ ghost_token = "ghost_pat_..."
 # Optional: prefix for every repository the playground creates.
 # name_prefix = "playground"
 
-# Optional: an organization you administer, to also create an org-owned repository.
+# Optional: an organization you administer, to also create an org-owned repository
+# and organization webhooks.
 # organization = "my-org"
 
 # Optional: the ID of a team in that organization, to add as a ruleset bypass
