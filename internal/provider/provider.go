@@ -138,6 +138,7 @@ func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataS
 		NewReleaseDataSource,
 		NewGitignoreTemplatesDataSource,
 		NewLicensesDataSource,
+		NewRepositoryStatusContextsDataSource,
 	}
 }
 
