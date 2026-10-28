@@ -249,6 +249,11 @@ func (c *Client) send(ctx context.Context, method, u string, body []byte) (*http
 func errorMessage(body []byte, status string) string {
 	var payload struct {
 		Message json.RawMessage `json:"message"`
+		Errors  []struct {
+			Field   string `json:"field"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"errors"`
 	}
 	if json.Unmarshal(body, &payload) != nil {
 		return status
@@ -256,6 +261,21 @@ func errorMessage(body []byte, status string) string {
 
 	var msg string
 	if json.Unmarshal(payload.Message, &msg) == nil && msg != "" {
+		// v3 validation errors say only "Validation Failed" and list the
+		// details in errors, e.g. {"field":"key","code":"already_exists"}.
+		var details []string
+		for _, e := range payload.Errors {
+			switch {
+			case e.Message != "":
+				details = append(details, e.Message)
+			case e.Field != "" || e.Code != "":
+				details = append(details, strings.TrimSpace(e.Field+" "+e.Code))
+			}
+		}
+		if len(details) > 0 {
+			return msg + ": " + strings.Join(details, "; ")
+		}
+
 		return msg
 	}
 	var msgs []string
