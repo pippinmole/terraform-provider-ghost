@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 )
 
 // Branches lists a repository's branches as returned by the native API.
@@ -80,4 +81,39 @@ func (c *Client) GetCommitStatus(ctx context.Context, owner, repo, ref string) (
 	}
 
 	return &s, nil
+}
+
+// ProtectedRef is a ref an active ruleset targets.
+type ProtectedRef struct {
+	// Rules are the rule types every active ruleset applies to the ref,
+	// unioned and in no particular order.
+	Rules []string `json:"rules"`
+	// Bypass is how far the caller may skip those rules: always,
+	// pull_requests_only or never.
+	Bypass string `json:"bypass"`
+}
+
+type protectedRefs struct {
+	Refs map[string]ProtectedRef `json:"refs"`
+}
+
+// ListProtectedBranches returns the branches of owner/repo that an active
+// ruleset targets, keyed by branch name without the refs/heads/ prefix. Only
+// existing branches are included; rulesets in evaluate or disabled mode, and
+// refs a ruleset excludes, are left out.
+func (c *Client) ListProtectedBranches(ctx context.Context, owner, repo string) (map[string]ProtectedRef, error) {
+	var p protectedRefs
+	path := NativePath("repositories", owner, repo, "protected-refs") + "?target=branch"
+	if err := c.Do(ctx, http.MethodGet, path, nil, &p); err != nil {
+		return nil, err
+	}
+
+	branches := make(map[string]ProtectedRef, len(p.Refs))
+	for ref, rules := range p.Refs {
+		if name, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			branches[name] = rules
+		}
+	}
+
+	return branches, nil
 }

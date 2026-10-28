@@ -128,3 +128,35 @@ func TestBranchErrors(t *testing.T) {
 		t.Errorf("CreateBranch: expected conflict, got %v", err)
 	}
 }
+
+func TestListProtectedBranches(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/repositories/octo/r/protected-refs" ||
+			r.URL.Query().Get("target") != "branch" {
+			t.Errorf("got %s %s", r.Method, r.URL)
+		}
+		_, _ = w.Write([]byte(`{"refs":{
+			"refs/heads/main":{"rules":["deletion","pull_request"],"bypass":"never"},
+			"refs/heads/feat/x":{"rules":["non_fast_forward"],"bypass":"always"},
+			"refs/tags/v1":{"rules":["deletion"],"bypass":"never"}}}`))
+	})
+
+	p, err := c.ListProtectedBranches(context.Background(), "octo", "r")
+	if err != nil {
+		t.Fatalf("ListProtectedBranches: %v", err)
+	}
+	if len(p) != 2 || len(p["main"].Rules) != 2 || p["feat/x"].Bypass != "always" {
+		t.Errorf("unexpected protected branches: %+v", p)
+	}
+}
+
+func TestListProtectedBranchesNone(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"refs":{}}`))
+	})
+
+	p, err := c.ListProtectedBranches(context.Background(), "octo", "r")
+	if err != nil || len(p) != 0 {
+		t.Errorf("got %v, %v", p, err)
+	}
+}
