@@ -746,6 +746,38 @@ resource "ghost_repository_collaborator" "organization" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_subscription: how the token's user watches a repository,
+# in each level. Destroy sets the level back to "participating". Import with
+# "<owner>/<slug>".
+# ---------------------------------------------------------------------------
+
+# Watch every thread on the full repository.
+resource "ghost_repository_subscription" "full" {
+  repository = ghost_repository.full.full_name
+  level      = "all"
+
+  # A replaced repository starts at "participating" again; watch it again.
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# Ignore the minimal repository: no notifications, not even mentions.
+resource "ghost_repository_subscription" "minimal" {
+  repository = ghost_repository.minimal.full_name
+  level      = "ignore"
+}
+
+# Pin the default level on the organization repository, so a watch set in the
+# web UI is undone on the next apply.
+resource "ghost_repository_subscription" "organization" {
+  count = length(ghost_repository.organization)
+
+  repository = ghost_repository.organization[0].full_name
+  level      = "participating"
+}
+
+# ---------------------------------------------------------------------------
 # ghost_team_membership, in each team form. Created only when
 # var.organization_team_id and the usernames are set. The users must already
 # be members of var.organization. Destroy takes them out of the team (not the
@@ -908,6 +940,16 @@ output "repository_collaborators" {
       { for r in ghost_repository_collaborator.full : "full" => r },
       { for r in ghost_repository_collaborator.organization : "organization" => r },
     ) : key => { id = c.id, role = c.role, status = c.status, expires_at = c.expires_at }
+  }
+}
+
+output "repository_subscriptions" {
+  description = "How the token's user watches the playground repositories."
+  value = {
+    for key, s in merge(
+      { full = ghost_repository_subscription.full, minimal = ghost_repository_subscription.minimal },
+      { for r in ghost_repository_subscription.organization : "organization" => r },
+    ) : key => { id = s.id, level = s.level }
   }
 }
 

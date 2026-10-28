@@ -17,6 +17,7 @@ FEATURES:
 * **New Resource:** `ghost_user_ssh_signing_key`
 * **New Resource:** `ghost_organization_pinned_repositories`
 * **New Resource:** `ghost_release`
+* **New Resource:** `ghost_repository_subscription`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`
