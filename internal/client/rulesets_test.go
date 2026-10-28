@@ -111,6 +111,30 @@ func TestListRulesets(t *testing.T) {
 	}
 }
 
+func TestListRulesetSummaries(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v3/repos/octo/r/rulesets" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`[{"id":75,"name":"a","target":"tag","enforcement":"evaluate","node_id":"RRS_x",` +
+			`"_links":{"self":{"href":"https://api.example/api/v3/repos/octo/r/rulesets/75"},` +
+			`"html":{"href":"https://web.example/octo/r/rules/75"}}}]`))
+	})
+
+	list, err := c.ListRulesetSummaries(context.Background(), "octo", "r")
+	if err != nil {
+		t.Fatalf("ListRulesetSummaries: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("got %d summaries, want 1", len(list))
+	}
+	got := list[0]
+	if got.ID != 75 || got.Name != "a" || got.NodeID != "RRS_x" || got.Target != "tag" || got.Enforcement != "evaluate" ||
+		got.Links.HTML.Href != "https://web.example/octo/r/rules/75" {
+		t.Errorf("unexpected summary: %+v", got)
+	}
+}
+
 func TestReplaceRuleset(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/repositories/octo/r/rulesets/ruleset_abc" {

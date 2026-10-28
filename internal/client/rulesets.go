@@ -127,6 +127,32 @@ func (c *Client) ListRulesets(ctx context.Context, owner, repo string) ([]Rulese
 	return out.Rulesets, nil
 }
 
+// RulesetSummary is a ruleset as v3 lists it: the numeric ID, node ID and
+// web link the native API doesn't return, without the conditions or rules.
+type RulesetSummary struct {
+	ID          int64  `json:"id"`
+	NodeID      string `json:"node_id"`
+	Name        string `json:"name"`
+	Target      string `json:"target"`
+	Enforcement string `json:"enforcement"`
+	Links       struct {
+		HTML struct {
+			Href string `json:"href"`
+		} `json:"html"`
+	} `json:"_links"`
+}
+
+// ListRulesetSummaries returns the v3 summary of every ruleset on the
+// repository owner/repo. Ghost returns them all in one response.
+func (c *Client) ListRulesetSummaries(ctx context.Context, owner, repo string) ([]RulesetSummary, error) {
+	var out []RulesetSummary
+	if err := c.Do(ctx, http.MethodGet, V3Path("repos", owner, repo, "rulesets"), nil, &out); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
 // ReplaceRuleset replaces the ruleset with the given id.
 func (c *Client) ReplaceRuleset(ctx context.Context, owner, repo, id string, req RulesetRequest) (*Ruleset, error) {
 	var rs Ruleset
