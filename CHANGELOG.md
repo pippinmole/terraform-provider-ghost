@@ -25,6 +25,7 @@ FEATURES:
 * **New Data Source:** `ghost_repositories`
 * **New Data Source:** `ghost_branches`
 * **New Data Source:** `ghost_release`
+* **New Data Source:** `ghost_gitignore_templates`
 
 ENHANCEMENTS:
 
