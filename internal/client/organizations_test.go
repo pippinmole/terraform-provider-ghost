@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"testing"
 )
@@ -61,5 +62,89 @@ func TestGetOrganizationNotFound(t *testing.T) {
 	var apiErr *APIError
 	if !IsNotFound(err) || !errors.As(err, &apiErr) || apiErr.Message != "Organization not found: nope" {
 		t.Errorf("GetOrganization error = %v, want a 404", err)
+	}
+}
+
+const testOrganizationSettings = `{"basePermission":null,"membersCanCreatePublicRepositories":true,"membersCanCreatePrivateRepositories":false,` +
+	`"allowPrivateForks":true,"oauthAppRestrictions":false,"defaultBranch":"trunk","description":"","website":null,"location":"Earth","email":null}`
+
+func TestGetOrganizationSettings(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/organizations/my%20org/settings" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(testOrganizationSettings))
+	})
+
+	s, err := c.GetOrganizationSettings(context.Background(), "my org")
+	if err != nil {
+		t.Fatalf("GetOrganizationSettings: %v", err)
+	}
+	if s.BasePermission != nil || !s.MembersCanCreatePublicRepositories || s.MembersCanCreatePrivateRepositories ||
+		!s.AllowPrivateForks || s.OAuthAppRestrictions || s.DefaultBranch == nil || *s.DefaultBranch != "trunk" ||
+		s.Description == nil || *s.Description != "" || s.Website != nil || s.Location == nil || *s.Location != "Earth" || s.Email != nil {
+		t.Errorf("unexpected settings: %+v", s)
+	}
+}
+
+func TestUpdateOrganizationSettings(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.Method != http.MethodPatch || r.URL.EscapedPath() != "/api/organizations/acme/settings" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		// Only the set fields are sent, and cleared ones as null.
+		const want = `{"allowPrivateForks":true,"basePermission":null,"defaultBranch":"trunk","description":"","website":null}`
+		if string(body) != want {
+			t.Errorf("body = %s, want %s", body, want)
+		}
+		_, _ = w.Write([]byte(testOrganizationSettings))
+	})
+
+	s, err := c.UpdateOrganizationSettings(context.Background(), "acme", UpdateOrganizationSettingsRequest{
+		BasePermission:    Null[string](),
+		AllowPrivateForks: Value(true),
+		DefaultBranch:     Value("trunk"),
+		Description:       Value(""),
+		Website:           Null[string](),
+	})
+	if err != nil {
+		t.Fatalf("UpdateOrganizationSettings: %v", err)
+	}
+	if s.DefaultBranch == nil || *s.DefaultBranch != "trunk" {
+		t.Errorf("unexpected settings: %+v", s)
+	}
+}
+
+func TestUpdateOrganizationSettingsEmpty(t *testing.T) {
+	// Ghost answers an empty update with a 500, so it's a GET instead.
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/organizations/acme/settings" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(testOrganizationSettings))
+	})
+
+	if !(UpdateOrganizationSettingsRequest{}).IsEmpty() {
+		t.Error("an empty request isn't empty")
+	}
+	if (UpdateOrganizationSettingsRequest{Email: Null[string]()}).IsEmpty() {
+		t.Error("a request that clears a field is empty")
+	}
+	if _, err := c.UpdateOrganizationSettings(context.Background(), "acme", UpdateOrganizationSettingsRequest{}); err != nil {
+		t.Fatalf("UpdateOrganizationSettings: %v", err)
+	}
+}
+
+func TestUpdateOrganizationSettingsValidation(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message":["website must be a URL address"],"error":"Bad Request","statusCode":400}`))
+	})
+
+	_, err := c.UpdateOrganizationSettings(context.Background(), "acme", UpdateOrganizationSettingsRequest{Website: Value("nope")})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest || apiErr.Message != "website must be a URL address" {
+		t.Errorf("UpdateOrganizationSettings error = %v, want a 400", err)
 	}
 }
