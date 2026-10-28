@@ -185,3 +185,53 @@ func TestSetOrganizationPinsNotFound(t *testing.T) {
 		t.Errorf("SetOrganizationPins error = %v, want a 404", err)
 	}
 }
+
+func TestListOutsideCollaborators(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/organizations/a%2Fb/outside-collaborators" {
+			t.Errorf("got %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(`{"collaborators":[{"username":"bob","name":"Bob","image":null,"repositories":[` +
+			`{"slug":"web","role":"write","pending":true},{"slug":"api","role":"read","pending":false}]},` +
+			`{"username":"alice","name":"Alice","image":"https://img.test/a.png","repositories":[]}]}`))
+	})
+
+	got, err := c.ListOutsideCollaborators(context.Background(), "a/b")
+	if err != nil {
+		t.Fatalf("ListOutsideCollaborators: %v", err)
+	}
+	if len(got) != 2 || got[0].Username != "bob" || got[0].Name != "Bob" || got[0].Image != nil ||
+		got[1].Image == nil || *got[1].Image != "https://img.test/a.png" || len(got[1].Repositories) != 0 {
+		t.Fatalf("unexpected collaborators: %+v", got)
+	}
+	want := []OutsideCollaboratorRepository{{Slug: "web", Role: "write", Pending: true}, {Slug: "api", Role: "read"}}
+	if len(got[0].Repositories) != 2 || got[0].Repositories[0] != want[0] || got[0].Repositories[1] != want[1] {
+		t.Errorf("unexpected repositories: %+v", got[0].Repositories)
+	}
+}
+
+func TestListOutsideCollaboratorsEmpty(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"collaborators":[]}`))
+	})
+
+	got, err := c.ListOutsideCollaborators(context.Background(), "acme")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("ListOutsideCollaborators = %+v, %v, want an empty list", got, err)
+	}
+}
+
+func TestListOutsideCollaboratorsErrors(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"statusCode":0,"message":"nope"}`))
+		})
+
+		_, err := c.ListOutsideCollaborators(context.Background(), "acme")
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != status || apiErr.Message != "nope" {
+			t.Errorf("status %d: error = %v", status, err)
+		}
+	}
+}

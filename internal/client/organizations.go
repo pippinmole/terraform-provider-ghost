@@ -191,3 +191,43 @@ func (c *Client) SetOrganizationPins(ctx context.Context, org string, slugs []st
 
 	return c.Do(ctx, http.MethodPut, NativePath("organizations", org, "pins"), body, nil)
 }
+
+// OutsideCollaborator is someone who has, or is invited to, a role on one
+// of an organization's repositories without being a member of it.
+type OutsideCollaborator struct {
+	Username     string                          `json:"username"`
+	Name         string                          `json:"name"`
+	Image        *string                         `json:"image"`
+	Repositories []OutsideCollaboratorRepository `json:"repositories"`
+}
+
+// OutsideCollaboratorRepository is one of the organization's repositories
+// an outside collaborator has a role on.
+type OutsideCollaboratorRepository struct {
+	Slug string `json:"slug"`
+	// Role is the collaborator's role: read, triage, write, maintain or
+	// admin.
+	Role string `json:"role"`
+	// Pending reports that the user was invited and hasn't accepted yet.
+	Pending bool `json:"pending"`
+}
+
+// ListOutsideCollaborators returns the people who aren't members of the
+// organization but have, or are invited to, a role on its repositories.
+// Members invited to a repository aren't listed. Only admins can list them:
+// Ghost answers 404 "Organization not found" outside the organization (and
+// its spec lists a 403 for members who aren't admins). The list isn't
+// paginated.
+func (c *Client) ListOutsideCollaborators(ctx context.Context, org string) ([]OutsideCollaborator, error) {
+	var out struct {
+		Collaborators []OutsideCollaborator `json:"collaborators"`
+	}
+	if err := c.Do(ctx, http.MethodGet, NativePath("organizations", org, "outside-collaborators"), nil, &out); err != nil {
+		return nil, err
+	}
+	if out.Collaborators == nil {
+		out.Collaborators = []OutsideCollaborator{}
+	}
+
+	return out.Collaborators, nil
+}
