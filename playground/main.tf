@@ -487,6 +487,47 @@ data "ghost_branches" "unprotected" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_release (resource)
+# ---------------------------------------------------------------------------
+
+# The minimal form: a published release on a new tag at the default branch.
+# The title falls back to the tag name in the web UI.
+resource "ghost_release" "minimal" {
+  repository = ghost_repository.full.full_name
+  tag_name   = "v0.1.0"
+}
+
+# Every argument. Ghost creates the tag at target_commitish (a branch, tag or
+# commit SHA), which is only used at creation. Destroying the release keeps
+# its tag. Import it with "<owner>/<slug>:<release_id>".
+resource "ghost_release" "full" {
+  repository       = ghost_repository.full.full_name
+  tag_name         = "v0.2.0-rc.1"
+  target_commitish = ghost_branch.full.branch
+  name             = "Release candidate 1"
+  body             = <<-EOT
+    ## What's changed
+
+    * Created by the **terraform-provider-ghost** playground.
+  EOT
+  draft            = false
+  prerelease       = true
+
+  lifecycle {
+    replace_triggered_by = [ghost_repository.full.repo_id]
+  }
+}
+
+# A draft, visible only to people who can write to the repository. Its tag is
+# created (and public) straight away.
+resource "ghost_release" "draft" {
+  repository = ghost_repository.full.full_name
+  tag_name   = "v0.3.0"
+  name       = "Next release"
+  draft      = true
+}
+
+# ---------------------------------------------------------------------------
 # ghost_branch_default (resource)
 # ---------------------------------------------------------------------------
 
