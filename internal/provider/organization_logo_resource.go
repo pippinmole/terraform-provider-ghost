@@ -64,7 +64,7 @@ func (r *OrganizationLogoResource) Metadata(_ context.Context, req resource.Meta
 
 func (r *OrganizationLogoResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Sets an organization's logo, the image shown on its profile and next to its repositories. " +
+		MarkdownDescription: "Sets an organization's logo, the avatar shown on its profile page. " +
 			"Only the organization's admins can set it.\n\n" +
 			"The image is a PNG or JPEG of up to 2 MiB, from exactly one of `file` or `content_base64`. The provider hashes it at plan time " +
 			"(`content_sha256`), so changing the bytes uploads the new image in place. Creating the resource replaces any " +

@@ -3,14 +3,14 @@
 page_title: "ghost_organization_logo Resource - ghost"
 subcategory: ""
 description: |-
-  Sets an organization's logo, the image shown on its profile and next to its repositories. Only the organization's admins can set it.
+  Sets an organization's logo, the avatar shown on its profile page. Only the organization's admins can set it.
   The image is a PNG or JPEG of up to 2 MiB, from exactly one of file or content_base64. The provider hashes it at plan time (content_sha256), so changing the bytes uploads the new image in place. Creating the resource replaces any logo the organization already has, and destroying it removes the logo. A logo changed or removed outside Terraform shows up as drift.
   ghost_organization_settings doesn't touch the logo, so the two can manage the same organization; the ghost_organization data source reads it back as logo.
 ---
 
 # ghost_organization_logo (Resource)
 
-Sets an organization's logo, the image shown on its profile and next to its repositories. Only the organization's admins can set it.
+Sets an organization's logo, the avatar shown on its profile page. Only the organization's admins can set it.
 
 The image is a PNG or JPEG of up to 2 MiB, from exactly one of `file` or `content_base64`. The provider hashes it at plan time (`content_sha256`), so changing the bytes uploads the new image in place. Creating the resource replaces any logo the organization already has, and destroying it removes the logo. A logo changed or removed outside Terraform shows up as drift.
 
