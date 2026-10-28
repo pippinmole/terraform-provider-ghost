@@ -43,6 +43,13 @@ ghost_token = "ghost_pat_..."
 # pins, and destroy unpins everything rather than restoring the old ones.
 # manage_organization_pins = true
 
+# Optional: upload playground/organization-logo.png as that organization's logo
+# with ghost_organization_logo. This replaces its logo, and destroy removes it
+# rather than restoring the old one. Set organization_logo_from_base64 to send
+# the same image as content_base64 instead of file.
+# manage_organization_logo      = true
+# organization_logo_from_base64 = false
+
 # Optional: an SSH public key to add as a commit signing key on your account
 # with ghost_user_ssh_signing_key. Generate a throwaway one first with:
 #   ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing

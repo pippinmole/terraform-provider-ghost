@@ -80,6 +80,18 @@ variable "manage_organization_settings" {
   default     = false
 }
 
+variable "manage_organization_logo" {
+  description = "Set to true to upload playground/organization-logo.png as var.organization's logo with ghost_organization_logo. Applying replaces the organization's logo, and destroy removes it: it doesn't restore the old one. You must be an admin of the organization."
+  type        = bool
+  default     = false
+}
+
+variable "organization_logo_from_base64" {
+  description = "Set to true to send the playground's organization logo as content_base64 rather than file, used when var.manage_organization_logo is true. The bytes are the same, so switching changes nothing on Ghost."
+  type        = bool
+  default     = false
+}
+
 variable "organization_email" {
   description = "Public email address for var.organization's profile, used when var.manage_organization_settings is true. The default, \"\", clears it."
   type        = string
@@ -278,6 +290,22 @@ resource "ghost_organization_settings" "this" {
   website                                 = "https://web.ghost.procrastinator.fyi"
   location                                = "" # "" clears a field
   email                                   = var.organization_email
+}
+
+# ---------------------------------------------------------------------------
+# ghost_organization_logo (resource). Created only when var.organization is
+# set and var.manage_organization_logo is true. The image (PNG or JPEG, up to
+# 2 MiB) comes from file or content_base64; it is hashed at plan time, so a
+# new image is uploaded in place. Destroy removes the logo. Import it with the
+# organization's slug.
+# ---------------------------------------------------------------------------
+
+resource "ghost_organization_logo" "this" {
+  count = var.organization != null && var.manage_organization_logo ? 1 : 0
+
+  organization   = var.organization
+  file           = var.organization_logo_from_base64 ? null : "${path.module}/organization-logo.png"
+  content_base64 = var.organization_logo_from_base64 ? filebase64("${path.module}/organization-logo.png") : null
 }
 
 # ---------------------------------------------------------------------------
@@ -1081,6 +1109,16 @@ output "organization_members" {
       }
     }
   ])
+}
+
+output "organization_logo" {
+  description = "var.organization's logo, when var.manage_organization_logo is true."
+  value = one([for l in ghost_organization_logo.this : {
+    url            = l.url
+    content_type   = l.content_type
+    size           = l.size
+    content_sha256 = l.content_sha256
+  }])
 }
 
 output "organization_settings" {
