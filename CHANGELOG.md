@@ -15,6 +15,7 @@ FEATURES:
 * **New Resource:** `ghost_organization_settings`
 * **New Resource:** `ghost_organization_webhook`
 * **New Resource:** `ghost_user_ssh_signing_key`
+* **New Resource:** `ghost_organization_pinned_repositories`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
 * **New Data Source:** `ghost_team`

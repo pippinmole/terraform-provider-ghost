@@ -68,6 +68,12 @@ variable "team_member" {
   default     = null
 }
 
+variable "manage_organization_pins" {
+  description = "Set to true to pin the playground's organization repositories to var.organization's profile with ghost_organization_pinned_repositories. Applying replaces the organization's pinned repositories, and destroy unpins them all: it doesn't restore the old pins. You must be an admin of the organization."
+  type        = bool
+  default     = false
+}
+
 variable "manage_organization_settings" {
   description = "Set to true to manage var.organization's settings with ghost_organization_settings. Applying overwrites its base permission, repository policies, default branch and profile, and destroy leaves them as they are: it doesn't restore the old values. You must be an admin of the organization."
   type        = bool
@@ -245,6 +251,25 @@ resource "ghost_organization_webhook" "full" {
   events          = ["repository.edited", "label.created", "member.added", "member.removed"]
   active          = false
   secret_rotation = "2026-10"
+}
+
+# ---------------------------------------------------------------------------
+# ghost_organization_pinned_repositories (resource). Created only when
+# var.organization is set and var.manage_organization_pins is true. It owns
+# the organization's whole list of pins (at most 6, in display order), and
+# destroy unpins everything. Import it with the organization's slug.
+# ---------------------------------------------------------------------------
+
+resource "ghost_organization_pinned_repositories" "this" {
+  count = var.organization != null && var.manage_organization_pins ? 1 : 0
+
+  organization = var.organization
+  # Refer to slug, not name: Ghost matches slugs exactly. The second
+  # repository exists only when var.organization_team_id is set.
+  repositories = concat(
+    ghost_repository.organization[*].slug,
+    ghost_repository.organization_team[*].slug,
+  )
 }
 
 # ---------------------------------------------------------------------------

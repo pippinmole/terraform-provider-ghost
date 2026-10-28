@@ -38,6 +38,11 @@ ghost_token = "ghost_pat_..."
 # manage_organization_settings = true
 # organization_email           = ""
 
+# Optional: pin the playground's organization repositories to its profile with
+# ghost_organization_pinned_repositories. This replaces the organization's
+# pins, and destroy unpins everything rather than restoring the old ones.
+# manage_organization_pins = true
+
 # Optional: an SSH public key to add as a commit signing key on your account
 # with ghost_user_ssh_signing_key. Generate a throwaway one first with:
 #   ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing
