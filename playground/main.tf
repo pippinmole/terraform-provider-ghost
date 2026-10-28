@@ -203,6 +203,29 @@ data "ghost_organization" "this" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_organization_members (data source), with and without the outside
+# collaborators. Read only when var.organization is set. Only members see
+# private members, and only admins can list outside collaborators (pending
+# invitations included). depends_on reads them after the collaborator
+# examples have invited var.collaborator.
+# ---------------------------------------------------------------------------
+
+data "ghost_organization_members" "this" {
+  count = var.organization == null ? 0 : 1
+
+  organization = var.organization
+}
+
+data "ghost_organization_members" "with_outside_collaborators" {
+  count = var.organization == null ? 0 : 1
+
+  organization                  = var.organization
+  include_outside_collaborators = true
+
+  depends_on = [ghost_repository_collaborator.organization]
+}
+
+# ---------------------------------------------------------------------------
 # ghost_repositories (data source): a user's or organization's repositories,
 # including the private ones the token's user can read. depends_on reads them
 # after the playground's repositories exist.
@@ -920,6 +943,9 @@ output "data_sources_agree" {
       for t in data.ghost_team.by_id : contains([for o in data.ghost_organization_teams.all[0].teams : o.id], t.id)
     ]),
     alltrue([for o in data.ghost_organization.this : o.id == lower(var.organization)]),
+    alltrue([
+      for m in data.ghost_organization_members.this : m.usernames == sort([for o in data.ghost_organization.this[0].members : o.username])
+    ]),
   ])
 }
 
@@ -953,6 +979,25 @@ output "organization" {
       members                 = { for m in o.members : m.username => { name = m.name, image = m.image, public = m.public } }
       pinned_repositories     = [for r in o.pinned_repositories : { full_name = r.full_name, name = r.name, description = r.description, visibility = r.visibility, slug = r.slug }]
       viewer_role             = o.viewer_role
+    }
+  ])
+}
+
+output "organization_members" {
+  description = "var.organization's members and outside collaborators, as listed by ghost_organization_members."
+  value = one([
+    for m in data.ghost_organization_members.with_outside_collaborators : {
+      id          = m.id
+      usernames   = m.usernames
+      viewer_role = m.viewer_role
+      members     = { for u in m.members : u.username => { name = u.name, image = u.image, public = u.public } }
+      outside_collaborators = {
+        for c in m.outside_collaborators : c.username => {
+          name         = c.name
+          image        = c.image
+          repositories = { for r in c.repositories : r.full_name => { slug = r.slug, role = r.role, pending = r.pending } }
+        }
+      }
     }
   ])
 }
