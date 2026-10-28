@@ -487,6 +487,17 @@ data "ghost_branches" "unprotected" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_repository_status_contexts (data source): the commit status contexts
+# CI has reported on a repository, most recent first, at most 50. They are
+# what the web UI suggests as a ruleset's required checks. The playground
+# reports no statuses, so the list stays empty until something like CI does.
+# ---------------------------------------------------------------------------
+
+data "ghost_repository_status_contexts" "full" {
+  repository = ghost_repository.full.full_name
+}
+
+# ---------------------------------------------------------------------------
 # ghost_release (resource)
 # ---------------------------------------------------------------------------
 
@@ -1046,5 +1057,17 @@ output "licenses" {
       featured       = data.ghost_licenses.mit.license.featured
       body           = data.ghost_licenses.mit.license.body
     }
+  }
+}
+
+output "status_contexts" {
+  description = "The status contexts ghost_repository.full has seen, and which of ghost_repository_ruleset.full's required checks haven't been reported yet."
+  value = {
+    repository = data.ghost_repository_status_contexts.full.id
+    contexts   = data.ghost_repository_status_contexts.full.contexts
+    required_but_unseen = [
+      for c in ghost_repository_ruleset.full.rules.required_status_checks.required_check : c.context
+      if !contains(data.ghost_repository_status_contexts.full.contexts, c.context)
+    ]
   }
 }
