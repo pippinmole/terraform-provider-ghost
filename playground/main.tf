@@ -115,7 +115,7 @@ resource "ghost_repository" "full" {
   visibility         = "public"
   auto_init          = true
   default_branch     = "main"
-  gitignore_template = "Go"
+  gitignore_template = data.ghost_gitignore_templates.go.template.name
   license_template   = "mit"
 }
 
@@ -556,6 +556,19 @@ data "ghost_release" "by_tag" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_gitignore_templates (data source)
+# ---------------------------------------------------------------------------
+
+# Every .gitignore template name, the values gitignore_template takes.
+data "ghost_gitignore_templates" "all" {}
+
+# One template and its content. Names are matched case-insensitively, and
+# template.name is Ghost's spelling ("Go"), which ghost_repository.full uses.
+data "ghost_gitignore_templates" "go" {
+  name = "go"
+}
+
+# ---------------------------------------------------------------------------
 # ghost_branch_default (resource)
 # ---------------------------------------------------------------------------
 
@@ -988,5 +1001,15 @@ output "releases" {
       published_at = r.published_at
       assets       = [for a in r.assets : a.browser_download_url]
     }
+  }
+}
+
+output "gitignore_templates" {
+  description = "The .gitignore template names, and the template ghost_repository.full was created with."
+  value = {
+    count     = length(data.ghost_gitignore_templates.all.names)
+    names     = data.ghost_gitignore_templates.all.names
+    go_name   = data.ghost_gitignore_templates.go.template.name
+    go_source = data.ghost_gitignore_templates.go.template.source
   }
 }

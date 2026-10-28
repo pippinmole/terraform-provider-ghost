@@ -114,7 +114,7 @@ func (r *RepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					createOnlyDescription, createOnlyDescription)},
 			},
 			"gitignore_template": schema.StringAttribute{
-				MarkdownDescription: "A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository, except when it was unset (e.g. after import).",
+				MarkdownDescription: "A `.gitignore` template to apply at creation, e.g. `Go` (`ghost_gitignore_templates` lists them; Ghost matches the name case-insensitively). Changing it forces a new repository, except when it was unset (e.g. after import).",
 				Optional:            true,
 				PlanModifiers:       createOnlyString,
 			},
