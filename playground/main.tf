@@ -528,6 +528,34 @@ resource "ghost_release" "draft" {
 }
 
 # ---------------------------------------------------------------------------
+# ghost_release (data source)
+# ---------------------------------------------------------------------------
+
+# The latest release: the newest published one that is neither a draft nor a
+# prerelease, so ghost_release.minimal here.
+data "ghost_release" "latest" {
+  repository  = ghost_repository.full.full_name
+  retrieve_by = "latest"
+
+  depends_on = [ghost_release.minimal, ghost_release.full, ghost_release.draft]
+}
+
+# A release by its numeric ID.
+data "ghost_release" "by_id" {
+  repository  = ghost_repository.full.full_name
+  retrieve_by = "id"
+  release_id  = ghost_release.full.release_id
+}
+
+# A release by its tag. Drafts are found too, for people who can write to the
+# repository.
+data "ghost_release" "by_tag" {
+  repository  = ghost_repository.full.full_name
+  retrieve_by = "tag"
+  release_tag = ghost_release.draft.tag_name
+}
+
+# ---------------------------------------------------------------------------
 # ghost_branch_default (resource)
 # ---------------------------------------------------------------------------
 
@@ -937,5 +965,28 @@ output "repository_lists" {
       }
     ])
     organization_slugs = one(data.ghost_repositories.organization[*].slugs)
+  }
+}
+
+output "releases" {
+  description = "Releases looked up by ghost_release: the latest, one by ID and a draft by tag."
+  value = {
+    for k, r in {
+      latest = data.ghost_release.latest
+      by_id  = data.ghost_release.by_id
+      by_tag = data.ghost_release.by_tag
+      } : k => {
+      id           = r.id
+      release_id   = r.release_id
+      tag          = r.release_tag
+      name         = r.name
+      draft        = r.draft
+      prerelease   = r.prerelease
+      commit_sha   = r.commit_sha
+      author_login = r.author_login
+      html_url     = r.html_url
+      published_at = r.published_at
+      assets       = [for a in r.assets : a.browser_download_url]
+    }
   }
 }

@@ -24,6 +24,7 @@ FEATURES:
 * **New Data Source:** `ghost_organization_teams`
 * **New Data Source:** `ghost_repositories`
 * **New Data Source:** `ghost_branches`
+* **New Data Source:** `ghost_release`
 
 ENHANCEMENTS:
 
