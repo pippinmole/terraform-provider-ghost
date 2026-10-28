@@ -154,6 +154,13 @@ func IsFieldError(err error, field, code string) bool {
 	return false
 }
 
+// IsForbidden reports whether err is an APIError with a 403 status.
+func IsForbidden(err error) bool {
+	var apiErr *APIError
+
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden
+}
+
 // IsConflict reports whether err is an APIError with a 409 status.
 func IsConflict(err error) bool {
 	var apiErr *APIError
