@@ -6,9 +6,38 @@ FEATURES:
 * **New Resource:** `ghost_repository`
 * **New Resource:** `ghost_issue_label`
 * **New Resource:** `ghost_repository_ruleset`
+* **New Resource:** `ghost_branch`
+* **New Resource:** `ghost_branch_default`
+* **New Resource:** `ghost_repository_webhook`
+* **New Resource:** `ghost_team_repository`
+* **New Resource:** `ghost_repository_collaborator`
+* **New Resource:** `ghost_team_membership`
+* **New Resource:** `ghost_organization_settings`
+* **New Resource:** `ghost_organization_webhook`
+* **New Resource:** `ghost_user_ssh_signing_key`
+* **New Resource:** `ghost_organization_pinned_repositories`
+* **New Resource:** `ghost_release`
+* **New Resource:** `ghost_repository_subscription`
+* **New Resource:** `ghost_release_asset`
+* **New Resource:** `ghost_organization_logo`
+* **New Resource:** `ghost_organization_public_membership`
 * **New Data Source:** `ghost_repository`
 * **New Data Source:** `ghost_user`
+* **New Data Source:** `ghost_team`
+* **New Data Source:** `ghost_organization`
+* **New Data Source:** `ghost_organization_teams`
+* **New Data Source:** `ghost_repositories`
+* **New Data Source:** `ghost_branches`
+* **New Data Source:** `ghost_release`
+* **New Data Source:** `ghost_gitignore_templates`
+* **New Data Source:** `ghost_licenses`
+* **New Data Source:** `ghost_repository_status_contexts`
+* **New Data Source:** `ghost_organization_members`
+* **New Data Source:** `ghost_repository_rulesets`
+* **New Data Source:** `ghost_codeowners_errors`
+* **New Data Source:** `ghost_storage_usage`
 
 ENHANCEMENTS:
 
+* Error messages from Ghost's v3 validation failures (`422 Validation Failed`) now include the field-level details Ghost returns, e.g. `key already_exists`.
 * Requests that hit Ghost's rate limit (`429`) are retried once the limit resets, honouring `Retry-After` and `X-RateLimit-Reset`. When a response reports no requests left, the provider waits for the reset instead of sending more.

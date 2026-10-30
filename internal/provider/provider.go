@@ -112,6 +112,21 @@ func (p *GhostProvider) Resources(_ context.Context) []func() resource.Resource 
 		NewRepositoryResource,
 		NewIssueLabelResource,
 		NewRepositoryRulesetResource,
+		NewBranchResource,
+		NewBranchDefaultResource,
+		NewRepositoryWebhookResource,
+		NewTeamRepositoryResource,
+		NewRepositoryCollaboratorResource,
+		NewRepositorySubscriptionResource,
+		NewTeamMembershipResource,
+		NewOrganizationSettingsResource,
+		NewOrganizationLogoResource,
+		NewOrganizationPublicMembershipResource,
+		NewOrganizationWebhookResource,
+		NewOrganizationPinnedRepositoriesResource,
+		NewUserSSHSigningKeyResource,
+		NewReleaseResource,
+		NewReleaseAssetResource,
 	}
 }
 
@@ -119,6 +134,19 @@ func (p *GhostProvider) DataSources(_ context.Context) []func() datasource.DataS
 	return []func() datasource.DataSource{
 		NewRepositoryDataSource,
 		NewUserDataSource,
+		NewTeamDataSource,
+		NewOrganizationDataSource,
+		NewOrganizationTeamsDataSource,
+		NewOrganizationMembersDataSource,
+		NewRepositoriesDataSource,
+		NewBranchesDataSource,
+		NewReleaseDataSource,
+		NewGitignoreTemplatesDataSource,
+		NewLicensesDataSource,
+		NewRepositoryStatusContextsDataSource,
+		NewRepositoryRulesetsDataSource,
+		NewCodeownersErrorsDataSource,
+		NewStorageUsageDataSource,
 	}
 }
 

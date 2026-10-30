@@ -10,9 +10,52 @@ ghost_token = "ghost_pat_..."
 # Optional: prefix for every repository the playground creates.
 # name_prefix = "playground"
 
-# Optional: an organization you administer, to also create an org-owned repository.
+# Optional: an organization you administer, to also create an org-owned repository
+# and organization webhooks.
 # organization = "my-org"
 
 # Optional: the ID of a team in that organization, to add as a ruleset bypass
-# actor. Find it with GET /api/orgs/<organization>/teams.
+# actor, to look up with the ghost_team data source and to give access to the
+# organization repositories with ghost_team_repository. Find it in the
+# organization_teams output after an apply with only organization set.
 # organization_team_id = "..."
+
+# Optional: the username of another Ghost user to invite to the repositories
+# with ghost_repository_collaborator. The invitation stays pending unless they
+# accept it, and destroy withdraws it.
+# collaborator = "octocat"
+
+# Optional: usernames of members of that organization to add to that team with
+# ghost_team_membership, one as a maintainer (by team ID) and one as a member
+# (by team slug). Only organization members can join its teams, and they can't
+# be invited with a token. Destroy takes them out of the team again.
+# team_maintainer = "alice"
+# team_member     = "bob"
+
+# Optional: manage that organization's settings with ghost_organization_settings.
+# This overwrites its base permission, repository policies, default branch and
+# profile, and destroy doesn't put the old values back.
+# manage_organization_settings = true
+# organization_email           = ""
+
+# Optional: pin the playground's organization repositories to its profile with
+# ghost_organization_pinned_repositories. This replaces the organization's
+# pins, and destroy unpins everything rather than restoring the old ones.
+# manage_organization_pins = true
+
+# Optional: upload playground/organization-logo.png as that organization's logo
+# with ghost_organization_logo. This replaces its logo, and destroy removes it
+# rather than restoring the old one. Set organization_logo_from_base64 to send
+# the same image as content_base64 instead of file.
+# manage_organization_logo      = true
+# organization_logo_from_base64 = false
+
+# Optional: make your membership of that organization public (true) or keep
+# it private (false) with ghost_organization_public_membership. Destroy makes
+# it private again.
+# organization_public_membership = true
+
+# Optional: an SSH public key to add as a commit signing key on your account
+# with ghost_user_ssh_signing_key. Generate a throwaway one first with:
+#   ssh-keygen -t ed25519 -N '' -f playground/.tf-acc-keys/signing
+# ssh_signing_key_file = ".tf-acc-keys/signing.pub"

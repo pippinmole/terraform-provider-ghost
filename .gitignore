@@ -24,3 +24,6 @@ dev.tfrc
 
 # Superpowers SDD scratch workspace
 .superpowers/
+
+# Throwaway SSH/GPG keys generated for acceptance tests
+playground/.tf-acc-keys/

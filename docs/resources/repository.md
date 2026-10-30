@@ -46,10 +46,10 @@ resource "ghost_repository" "org" {
 ### Optional
 
 - `auto_init` (Boolean) Create an initial commit when the repository is created. Changing it forces a new repository, except when it was unset (e.g. after import).
-- `default_branch` (String) The default branch. The branch must already exist, so on a new repository this usually needs `auto_init`.
+- `default_branch` (String) The default branch. The branch must already exist, so on a new repository this usually needs `auto_init`. `ghost_branch_default` manages the same setting: use one or the other, not both. Use `ghost_branch_default` to make a branch created with `ghost_branch` the default, and leave this unset.
 - `description` (String) A short description of the repository.
-- `gitignore_template` (String) A `.gitignore` template to apply at creation, e.g. `Go`. Changing it forces a new repository, except when it was unset (e.g. after import).
-- `license_template` (String) A license template to apply at creation, e.g. `mit`. Changing it forces a new repository, except when it was unset (e.g. after import).
+- `gitignore_template` (String) A `.gitignore` template to apply at creation, e.g. `Go` (`ghost_gitignore_templates` lists them; Ghost matches the name case-insensitively). Changing it forces a new repository, except when it was unset (e.g. after import).
+- `license_template` (String) A license template to apply at creation, e.g. `mit` (`ghost_licenses` lists the keys; Ghost matches the key case-insensitively, so an SPDX ID such as `MIT` also works). Changing it forces a new repository, except when it was unset (e.g. after import).
 - `owner` (String) The user or organization that owns the repository. Defaults to the authenticated user. Changing it (other than its letter case) forces a new repository.
 - `visibility` (String) Either `public` or `private`. Defaults to `private`.
 

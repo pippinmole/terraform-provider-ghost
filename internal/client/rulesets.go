@@ -72,15 +72,6 @@ type StatusCheck struct {
 	Context string `json:"context"`
 }
 
-// Team is a team in an organization.
-type Team struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Slug            string `json:"slug"`
-	MemberCount     int64  `json:"memberCount"`
-	RepositoryCount int64  `json:"repositoryCount"`
-}
-
 func rulesetPath(owner, repo string, id ...string) string {
 	return NativePath(append([]string{"repositories", owner, repo, "rulesets"}, id...)...)
 }
@@ -136,6 +127,32 @@ func (c *Client) ListRulesets(ctx context.Context, owner, repo string) ([]Rulese
 	return out.Rulesets, nil
 }
 
+// RulesetSummary is a ruleset as v3 lists it: the numeric ID, node ID and
+// web link the native API doesn't return, without the conditions or rules.
+type RulesetSummary struct {
+	ID          int64  `json:"id"`
+	NodeID      string `json:"node_id"`
+	Name        string `json:"name"`
+	Target      string `json:"target"`
+	Enforcement string `json:"enforcement"`
+	Links       struct {
+		HTML struct {
+			Href string `json:"href"`
+		} `json:"html"`
+	} `json:"_links"`
+}
+
+// ListRulesetSummaries returns the v3 summary of every ruleset on the
+// repository owner/repo. Ghost returns them all in one response.
+func (c *Client) ListRulesetSummaries(ctx context.Context, owner, repo string) ([]RulesetSummary, error) {
+	var out []RulesetSummary
+	if err := c.Do(ctx, http.MethodGet, V3Path("repos", owner, repo, "rulesets"), nil, &out); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
 // ReplaceRuleset replaces the ruleset with the given id.
 func (c *Client) ReplaceRuleset(ctx context.Context, owner, repo, id string, req RulesetRequest) (*Ruleset, error) {
 	var rs Ruleset
@@ -149,16 +166,4 @@ func (c *Client) ReplaceRuleset(ctx context.Context, owner, repo, id string, req
 // DeleteRuleset deletes the ruleset with the given id.
 func (c *Client) DeleteRuleset(ctx context.Context, owner, repo, id string) error {
 	return c.Do(ctx, http.MethodDelete, rulesetPath(owner, repo, id), nil, nil)
-}
-
-// ListOrganizationTeams returns the teams in the organization org.
-func (c *Client) ListOrganizationTeams(ctx context.Context, org string) ([]Team, error) {
-	var out struct {
-		Teams []Team `json:"teams"`
-	}
-	if err := c.Do(ctx, http.MethodGet, NativePath("organizations", org, "teams"), nil, &out); err != nil {
-		return nil, err
-	}
-
-	return out.Teams, nil
 }
